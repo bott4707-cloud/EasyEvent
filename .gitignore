@@ -1,0 +1,16 @@
+# Build output and installed packages
+node_modules/
+dist/
+
+# Local tooling and generated browser data
+.edge-tmp/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+
+# Environment files are kept out of version control throughout the project.
+.env
+.env.*
+!.env.example
