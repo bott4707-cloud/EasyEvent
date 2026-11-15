@@ -241,17 +241,75 @@ const memoryStore = {
   sessions: [],
 };
 
+// Helper to prevent hanging database queries from blocking the event loop
+function withTimeout(promise, ms = 1200) {
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Database query timeout")), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+// Track unavailable / missing database tables to avoid repeat failed round-trips
+const missingTables = new Map();
+
+function isTableAvailable(tableName) {
+  if (!missingTables.has(tableName)) return true;
+  const checkedAt = missingTables.get(tableName);
+  // Retry checking after 5 minutes
+  if (Date.now() - checkedAt > 5 * 60 * 1000) {
+    missingTables.delete(tableName);
+    return true;
+  }
+  return false;
+}
+
+function handleSupabaseError(tableName, error) {
+  if (
+    error &&
+    (error.code === "PGRST205" ||
+      error.message?.includes("schema cache") ||
+      error.message?.includes("Could not find the table") ||
+      error.code === "42P01")
+  ) {
+    missingTables.set(tableName, Date.now());
+  }
+}
+
+// Proactive background cache warmup on boot to eliminate cold query lag
+if (isSupabaseConfigured) {
+  setTimeout(async () => {
+    const tables = ["users", "sessions", "events", "shifts", "staffing_requests"];
+    await Promise.all(
+      tables.map(async (table) => {
+        try {
+          const { error } = await withTimeout(supabase.from(table).select("id").limit(1), 800);
+          if (error) handleSupabaseError(table, error);
+        } catch {
+          missingTables.set(table, Date.now());
+        }
+      })
+    );
+  }, 50);
+}
+
 // Database Access Methods
 export async function getPublicEvents() {
   let list = [];
-  if (isSupabaseConfigured) {
+  if (isSupabaseConfigured && isTableAvailable("events")) {
     try {
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .eq("status", "Published")
-        .order("date", { ascending: true });
-      if (!error && data && data.length > 0) {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("events")
+          .select("*")
+          .eq("status", "Published")
+          .order("date", { ascending: true }),
+        1200
+      );
+      if (error) {
+        handleSupabaseError("events", error);
+        list = memoryStore.events.filter((e) => e.status === "Published");
+      } else if (data && data.length > 0) {
         list = data;
       } else {
         list = memoryStore.events.filter((e) => e.status === "Published");
@@ -274,61 +332,117 @@ export async function getPublicEvents() {
 
 export async function findUserByEmail(email) {
   const normalized = email.trim().toLowerCase();
-  if (isSupabaseConfigured) {
+
+  // 1. Check in-memory users first (instant: 0ms)
+  const memUser = memoryStore.users.find((u) => u.email.toLowerCase() === normalized);
+  if (memUser) return memUser;
+
+  // 2. Query Supabase if table is available
+  if (isSupabaseConfigured && isTableAvailable("users")) {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .ilike("email", normalized)
-        .maybeSingle();
-      if (!error && data) return data;
+      const { data, error } = await withTimeout(
+        supabase
+          .from("users")
+          .select("*")
+          .ilike("email", normalized)
+          .maybeSingle(),
+        1200
+      );
+      if (error) {
+        handleSupabaseError("users", error);
+      } else if (data) {
+        if (!memoryStore.users.some((u) => u.id === data.id)) {
+          memoryStore.users.push(data);
+        }
+        return data;
+      }
     } catch {
-      // fallback
+      // Supabase timeout or network error fallback
     }
   }
-  return memoryStore.users.find((u) => u.email.toLowerCase() === normalized) || null;
+
+  return null;
 }
 
 export async function findUserById(id) {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (!error && data) return data;
+  // 1. Check in-memory users first
+  const memUser = memoryStore.users.find((u) => u.id === id);
+  if (memUser) return memUser;
+
+  // 2. Query Supabase if table is available
+  if (isSupabaseConfigured && isTableAvailable("users")) {
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("users")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle(),
+        1200
+      );
+      if (error) {
+        handleSupabaseError("users", error);
+      } else if (data) {
+        if (!memoryStore.users.some((u) => u.id === data.id)) {
+          memoryStore.users.push(data);
+        }
+        return data;
+      }
+    } catch {
+      // Timeout fallback
+    }
   }
-  return memoryStore.users.find((u) => u.id === id) || null;
+
+  return null;
 }
 
 export async function createUser(userData) {
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from("users")
-      .insert({
-        name: userData.name,
-        email: userData.email.toLowerCase(),
-        role: userData.role,
-        password_salt: userData.password_salt,
-        password_hash: userData.password_hash,
-        available: false,
-        available_dates: [],
-      })
-      .select()
-      .single();
-    if (!error && data) return data;
-  }
+  const normalizedEmail = userData.email.toLowerCase();
   const user = {
     id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: userData.name,
-    email: userData.email.toLowerCase(),
+    email: normalizedEmail,
     role: userData.role,
     password_salt: userData.password_salt,
     password_hash: userData.password_hash,
     available: false,
     available_dates: [],
   };
+
+  // Add to memory immediately so the session and user are ready without delay
   memoryStore.users.push(user);
+
+  if (isSupabaseConfigured && isTableAvailable("users")) {
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .from("users")
+          .insert({
+            id: user.id,
+            name: userData.name,
+            email: normalizedEmail,
+            role: userData.role,
+            password_salt: userData.password_salt,
+            password_hash: userData.password_hash,
+            available: false,
+            available_dates: [],
+          })
+          .select()
+          .single(),
+        1500
+      );
+      if (error) {
+        handleSupabaseError("users", error);
+      } else if (data) {
+        const idx = memoryStore.users.findIndex((u) => u.email === normalizedEmail);
+        if (idx !== -1) memoryStore.users[idx] = data;
+        return data;
+      }
+    } catch {
+      // Fall back to memory user
+    }
+  }
+
   return user;
 }
 
@@ -339,23 +453,26 @@ export async function createSession(tokenHash, userId, expiresAt) {
     expires_at: expiresAt,
   });
 
-  if (isSupabaseConfigured) {
-    try {
-      await supabase.from("sessions").insert({
+  // Non-blocking background persistence so login HTTP response is never stalled
+  if (isSupabaseConfigured && isTableAvailable("sessions")) {
+    supabase
+      .from("sessions")
+      .insert({
         token_hash: tokenHash,
         user_id: userId,
         expires_at: expiresAt,
-      });
-    } catch {
-      // Supabase table not created yet or fallback
-    }
+      })
+      .then(({ error }) => {
+        if (error) handleSupabaseError("sessions", error);
+      })
+      .catch(() => {});
   }
 }
 
 export async function getUserBySession(tokenHash) {
   const now = Math.floor(Date.now() / 1000);
   
-  // 1. Check in-memory active sessions first
+  // 1. Check in-memory active sessions first (instant: 0ms)
   const sess = memoryStore.sessions.find(
     (s) => s.token_hash === tokenHash && s.expires_at > now
   );
@@ -364,18 +481,28 @@ export async function getUserBySession(tokenHash) {
     if (memUser) return memUser;
   }
 
-  // 2. Check Supabase
-  if (isSupabaseConfigured) {
+  // 2. Check Supabase if table is available
+  if (isSupabaseConfigured && isTableAvailable("sessions")) {
     try {
-      const { data, error } = await supabase
-        .from("sessions")
-        .select("user_id, expires_at, users(*)")
-        .eq("token_hash", tokenHash)
-        .gt("expires_at", now)
-        .maybeSingle();
-      if (!error && data?.users) return data.users;
+      const { data, error } = await withTimeout(
+        supabase
+          .from("sessions")
+          .select("user_id, expires_at, users(*)")
+          .eq("token_hash", tokenHash)
+          .gt("expires_at", now)
+          .maybeSingle(),
+        1200
+      );
+      if (error) {
+        handleSupabaseError("sessions", error);
+      } else if (data?.users) {
+        if (!memoryStore.users.some((u) => u.id === data.users.id)) {
+          memoryStore.users.push(data.users);
+        }
+        return data.users;
+      }
     } catch {
-      // Supabase table not created yet or fallback
+      // Supabase timeout or fallback
     }
   }
 
@@ -384,12 +511,15 @@ export async function getUserBySession(tokenHash) {
 
 export async function deleteSession(tokenHash) {
   memoryStore.sessions = memoryStore.sessions.filter((s) => s.token_hash !== tokenHash);
-  if (isSupabaseConfigured) {
-    try {
-      await supabase.from("sessions").delete().eq("token_hash", tokenHash);
-    } catch {
-      // Supabase fallback
-    }
+  if (isSupabaseConfigured && isTableAvailable("sessions")) {
+    supabase
+      .from("sessions")
+      .delete()
+      .eq("token_hash", tokenHash)
+      .then(({ error }) => {
+        if (error) handleSupabaseError("sessions", error);
+      })
+      .catch(() => {});
   }
 }
 
@@ -401,40 +531,66 @@ export async function getDashboardState(user) {
   let requests = [];
   let shifts = [];
 
-  if (isSupabaseConfigured) {
+  const canQuerySupabase = isSupabaseConfigured && isTableAvailable("events") && isTableAvailable("shifts");
+
+  if (canQuerySupabase) {
     try {
       if (role === "admin") {
-        const [uRes, eRes, rRes, sRes] = await Promise.all([
-          supabase.from("users").select("id, name, email, role").order("name"),
-          supabase.from("events").select("*").order("date"),
-          supabase.from("staffing_requests").select("*").order("created_at", { ascending: false }),
-          supabase.from("shifts").select("*").order("date"),
-        ]);
+        const [uRes, eRes, rRes, sRes] = await withTimeout(
+          Promise.all([
+            isTableAvailable("users")
+              ? supabase.from("users").select("id, name, email, role").order("name")
+              : Promise.resolve({ data: [] }),
+            supabase.from("events").select("*").order("date"),
+            isTableAvailable("staffing_requests")
+              ? supabase.from("staffing_requests").select("*").order("created_at", { ascending: false })
+              : Promise.resolve({ data: [] }),
+            supabase.from("shifts").select("*").order("date"),
+          ]),
+          1500
+        );
+        if (uRes.error) handleSupabaseError("users", uRes.error);
+        if (eRes.error) handleSupabaseError("events", eRes.error);
+        if (rRes.error) handleSupabaseError("staffing_requests", rRes.error);
+        if (sRes.error) handleSupabaseError("shifts", sRes.error);
         users = uRes.data || [];
         events = eRes.data || [];
         requests = rRes.data || [];
         shifts = sRes.data || [];
       } else if (role === "organizer") {
-        const [eRes, rRes, sRes] = await Promise.all([
-          supabase.from("events").select("*").or(`owner_id.eq.${user.id},owner_id.is.null`).order("date"),
-          supabase.from("staffing_requests").select("*").eq("organizer_id", user.id).order("created_at", { ascending: false }),
-          supabase.from("shifts").select("*").order("date"),
-        ]);
+        const [eRes, rRes, sRes] = await withTimeout(
+          Promise.all([
+            supabase.from("events").select("*").or(`owner_id.eq.${user.id},owner_id.is.null`).order("date"),
+            isTableAvailable("staffing_requests")
+              ? supabase.from("staffing_requests").select("*").eq("organizer_id", user.id).order("created_at", { ascending: false })
+              : Promise.resolve({ data: [] }),
+            supabase.from("shifts").select("*").order("date"),
+          ]),
+          1500
+        );
+        if (eRes.error) handleSupabaseError("events", eRes.error);
+        if (rRes.error) handleSupabaseError("staffing_requests", rRes.error);
+        if (sRes.error) handleSupabaseError("shifts", sRes.error);
         events = eRes.data || [];
         requests = rRes.data || [];
         const eventIds = new Set(events.map((e) => e.id));
         shifts = (sRes.data || []).filter((s) => eventIds.has(s.event_id));
       } else {
         // worker
-        const [eRes, sRes] = await Promise.all([
-          supabase.from("events").select("*").eq("status", "Published").order("date"),
-          supabase.from("shifts").select("*").or(`worker_id.eq.${user.id},worker_id.is.null`).order("date"),
-        ]);
+        const [eRes, sRes] = await withTimeout(
+          Promise.all([
+            supabase.from("events").select("*").eq("status", "Published").order("date"),
+            supabase.from("shifts").select("*").or(`worker_id.eq.${user.id},worker_id.is.null`).order("date"),
+          ]),
+          1500
+        );
+        if (eRes.error) handleSupabaseError("events", eRes.error);
+        if (sRes.error) handleSupabaseError("shifts", sRes.error);
         events = eRes.data || [];
         shifts = sRes.data || [];
       }
     } catch (err) {
-      console.warn("Supabase dashboard query failed, using memory fallback", err);
+      console.warn("Supabase dashboard query failed or timed out, using memory fallback");
     }
   }
 

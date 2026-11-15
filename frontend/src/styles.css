@@ -237,36 +237,6 @@ h6 {
   letter-spacing: 0.05em;
 }
 
-.connection-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: var(--radius-full);
-  font-size: 0.72rem;
-  font-weight: 700;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-muted);
-  color: var(--ink-secondary);
-}
-
-.connection-badge.connected {
-  background: var(--emerald-light);
-  border-color: var(--emerald-border);
-  color: var(--emerald-dark);
-}
-
-.connection-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-}
-
-.connection-badge.standalone .connection-dot {
-  background: #f59e0b;
-}
-
 .desktop-nav {
   display: flex;
   align-items: center;
@@ -3274,13 +3244,6 @@ h6 {
 }
 
 @media (max-width: 480px) {
-  .connection-text {
-    display: none;
-  }
-
-  .connection-badge {
-    padding: 4px 6px;
-  }
   .brand-tagline {
     display: none;
   }

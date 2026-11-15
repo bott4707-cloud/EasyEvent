@@ -23,7 +23,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ currentPath, navigate }: NavbarProps) {
-  const { currentUser, logout, isBackendConnected } = useAuth();
+  const { currentUser, logout } = useAuth();
   const { t } = useLanguage();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const hasAccount = typeof window !== "undefined" && localStorage.getItem("easyevent_has_account") === "true";
@@ -85,20 +85,6 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
                 <span className="brand-tagline">Bengaluru Crew Hub</span>
               </div>
             </button>
-
-            <div
-              className={`connection-badge ${isBackendConnected ? "connected" : "standalone"}`}
-              title={
-                isBackendConnected
-                  ? "Connected to Node.js Backend with Supabase DB"
-                  : "Standalone / Local Persistence Mode active"
-              }
-            >
-              <span className="connection-dot" aria-hidden="true" />
-              <span className="connection-text">
-                {isBackendConnected ? "API Live" : "Local Mode"}
-              </span>
-            </div>
           </div>
 
           {/* Desktop Nav - Strictly Isolated per User Role */}

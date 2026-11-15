@@ -131,8 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUser(session.user);
         try { localStorage.setItem("easyevent_has_account", "true"); } catch { }
         setAppData(session.data);
-        const evts = await api.loadEvents().catch(() => session.data.events);
-        setPublicEvents(evts);
+        if (session.data?.events) {
+          setPublicEvents(session.data.events);
+        }
         return session.user;
       }
 
@@ -169,8 +170,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUser(session.user);
         try { localStorage.setItem("easyevent_has_account", "true"); } catch { }
         setAppData(session.data);
-        const evts = await api.loadEvents().catch(() => session.data.events);
-        setPublicEvents(evts);
+        if (session.data?.events) {
+          setPublicEvents(session.data.events);
+        }
         return session.user;
       }
 
@@ -221,8 +223,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const session = await api.login(email, password);
           setCurrentUser(session.user);
           setAppData(session.data);
-          const evts = await api.loadEvents().catch(() => session.data.events);
-          setPublicEvents(evts);
+          if (session.data?.events) {
+            setPublicEvents(session.data.events);
+          }
           return session.user;
         } catch (err) {
           console.warn("Backend demo login failed, falling back to local state", err);
