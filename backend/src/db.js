@@ -245,12 +245,20 @@ const memoryStore = {
 export async function getPublicEvents() {
   let list = [];
   if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .eq("status", "Published")
-      .order("date", { ascending: true });
-    if (!error && data) list = data;
+    try {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("status", "Published")
+        .order("date", { ascending: true });
+      if (!error && data && data.length > 0) {
+        list = data;
+      } else {
+        list = memoryStore.events.filter((e) => e.status === "Published");
+      }
+    } catch {
+      list = memoryStore.events.filter((e) => e.status === "Published");
+    }
   } else {
     list = memoryStore.events.filter((e) => e.status === "Published");
   }
@@ -267,12 +275,16 @@ export async function getPublicEvents() {
 export async function findUserByEmail(email) {
   const normalized = email.trim().toLowerCase();
   if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .ilike("email", normalized)
-      .maybeSingle();
-    if (!error && data) return data;
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .ilike("email", normalized)
+        .maybeSingle();
+      if (!error && data) return data;
+    } catch {
+      // fallback
+    }
   }
   return memoryStore.users.find((u) => u.email.toLowerCase() === normalized) || null;
 }
@@ -408,7 +420,7 @@ export async function getDashboardState(user) {
   }
 
   // Fallback to memory store if Supabase not used or empty
-  if (!isSupabaseConfigured) {
+  if (!isSupabaseConfigured || events.length === 0) {
     if (role === "admin") {
       users = memoryStore.users.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role }));
       events = memoryStore.events;
