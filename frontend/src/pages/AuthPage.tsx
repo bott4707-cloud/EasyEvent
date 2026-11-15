@@ -3,7 +3,6 @@ import {
   Lock,
   Mail,
   User,
-  Shield,
   Briefcase,
   Sparkles,
   Eye,
@@ -147,17 +146,6 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
           >
             <Sparkles size={16} />
             <span>{t("auth_tab_organizer")}</span>
-          </button>
-          <button
-            type="button"
-            className={`role-tab-btn role-admin ${role === "admin" ? "active" : ""}`}
-            onClick={() => {
-              setRole("admin");
-              setMode("signin");
-            }}
-          >
-            <Shield size={16} />
-            <span>{t("auth_tab_admin")}</span>
           </button>
         </div>
 

@@ -44,11 +44,6 @@ export function Footer({ navigate }: { navigate: (route: string) => void }) {
                 {t("nav_organizer")}
               </button>
             </li>
-            <li>
-              <button type="button" onClick={() => navigate("/admin")}>
-                {t("nav_admin")}
-              </button>
-            </li>
           </ul>
         </div>
 

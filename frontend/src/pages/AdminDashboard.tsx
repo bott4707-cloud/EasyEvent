@@ -65,11 +65,8 @@ export function AdminDashboard({ navigate }: { navigate: (route: string) => void
             You must be logged in with Administrator credentials to view platform audits and manage event workflows.
           </p>
           <div className="button-row justify-center">
-            <Button variant="primary" onClick={() => navigate("/auth/admin")}>
-              Admin Sign In
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/")}>
-              Back to Home
+            <Button variant="primary" onClick={() => navigate("/")}>
+              Return to Home
             </Button>
           </div>
         </Card>
