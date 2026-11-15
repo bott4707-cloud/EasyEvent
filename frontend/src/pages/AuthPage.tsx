@@ -9,8 +9,6 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  LogIn,
-  UserPlus,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -175,28 +173,6 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
         </div>
 
         <Card variant="elevated" className={`auth-card role-themed-${role}`}>
-          {/* Segmented Mode Switcher (Log In vs Sign Up) */}
-          {canSignUp && (
-            <div className="auth-mode-switch-tabs">
-              <button
-                type="button"
-                className={`mode-tab-btn ${mode === "signin" ? "active" : ""}`}
-                onClick={() => setMode("signin")}
-              >
-                <LogIn size={15} />
-                <span>{t("auth_tab_login")}</span>
-              </button>
-              <button
-                type="button"
-                className={`mode-tab-btn ${mode === "signup" ? "active" : ""}`}
-                onClick={() => setMode("signup")}
-              >
-                <UserPlus size={15} />
-                <span>{t("auth_tab_signup")}</span>
-              </button>
-            </div>
-          )}
-
           <div className="auth-card-header">
             <span className={`auth-eyebrow eyebrow-${role}`}>
               {role === "admin"

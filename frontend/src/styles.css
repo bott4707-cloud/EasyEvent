@@ -2383,53 +2383,6 @@ h6 {
   border-color: rgba(15, 23, 42, 0.2);
 }
 
-/* Sub-mode Segmented Switch inside Auth Card (Log In vs Sign Up) */
-.auth-mode-switch-tabs {
-  display: flex;
-  background: var(--surface-muted);
-  padding: 4px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-subtle);
-  margin-bottom: 20px;
-  gap: 4px;
-}
-
-.mode-tab-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--ink-secondary);
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.mode-tab-btn:hover {
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.6);
-}
-
-.mode-tab-btn.active {
-  background: #ffffff;
-  color: var(--primary);
-  border-color: rgba(37, 99, 235, 0.15);
-  box-shadow: var(--shadow-sm);
-}
-
-.auth-card.role-themed-organizer .mode-tab-btn.active {
-  color: var(--organizer);
-  border-color: rgba(124, 58, 237, 0.15);
-}
-
 .auth-card-header {
   text-align: center;
   margin-bottom: 24px;
