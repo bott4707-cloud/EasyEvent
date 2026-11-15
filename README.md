@@ -92,6 +92,36 @@ Frontend application will be live at: `http://localhost:5173`
 
 ---
 
+## 🚀 Deployment Guide (Vercel + Render)
+
+### 1. Deploy Frontend on Vercel
+1. Go to [Vercel](https://vercel.com) and click **Add New Project**.
+2. Import your GitHub repository: `https://github.com/bott4707-cloud/EasyEvent.git`.
+3. Set the **Root Directory** to `frontend`.
+4. Under **Environment Variables**, add:
+   - `VITE_API_URL`: `https://<your-render-backend-name>.onrender.com`
+5. Click **Deploy**. Vercel uses `vercel.json` for seamless SPA routing (no 404s on page refresh).
+
+### 2. Deploy Backend & Database on Render
+1. Go to [Render Dashboard](https://dashboard.render.com) and click **New + > Web Service** (or use the included `render.yaml` Blueprint).
+2. Connect your repository: `https://github.com/bott4707-cloud/EasyEvent.git`.
+3. Settings:
+   - **Root Directory**: `backend`
+   - **Build Command**: `npm install`
+   - **Start Command**: `node src/server.js`
+4. Add the following **Environment Variables** in Render:
+   - `NODE_ENV`: `production`
+   - `PORT`: `8000`
+   - `SESSION_COOKIE_SECURE`: `true`
+   - `FRONTEND_URL`: `https://<your-vercel-app>.vercel.app`
+   - `SUPABASE_URL`: `https://zjjeeysydlpmzzgbpzrz.supabase.co`
+   - `SUPABASE_ANON_KEY`: `sb_publishable_...`
+   - `SUPABASE_SERVICE_ROLE_KEY`: `sb_secret_...`
+   *(Or if using Render's Managed PostgreSQL, set `DATABASE_URL`)*
+5. Click **Create Web Service**.
+
+---
+
 ## 📁 Repository Structure
 
 ```

@@ -33,6 +33,7 @@ import {
   deleteAdminUser,
 } from "./db.js";
 import { isSupabaseConfigured } from "./supabase.js";
+import { isPgConfigured } from "./pg.js";
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -40,17 +41,37 @@ const SESSION_COOKIE = "easyevent_session";
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 const isProduction = process.env.NODE_ENV === "production";
-const isCookieSecure = process.env.SESSION_COOKIE_SECURE === "true";
+const isCookieSecure = process.env.SESSION_COOKIE_SECURE === "true" || isProduction;
+// When deployed cross-origin (Vercel frontend + Render backend), cookies require SameSite=None and Secure=true
+const cookieSameSite = isProduction ? "none" : "lax";
+
+// Trust reverse proxy load balancer (required on Render for HTTPS termination & secure cookies)
+app.set("trust proxy", 1);
+
+// CORS Configuration supporting Vercel frontend, custom domains, and local development
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+];
+
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ""));
+}
 
 // Middlewares
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      "http://localhost:4173",
-      "http://127.0.0.1:4173",
-    ],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, health checks)
+      if (!origin) return callback(null, true);
+      // Allow configured origins and all Vercel deployment URLs (*.vercel.app)
+      if (allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
@@ -63,7 +84,7 @@ function setSessionCookie(res, token) {
     maxAge: SESSION_TTL_SECONDS * 1000,
     httpOnly: true,
     secure: isCookieSecure,
-    sameSite: "lax",
+    sameSite: cookieSameSite,
     path: "/",
   });
 }
@@ -72,7 +93,7 @@ function clearSessionCookie(res) {
   res.clearCookie(SESSION_COOKIE, {
     httpOnly: true,
     secure: isCookieSecure,
-    sameSite: "lax",
+    sameSite: cookieSameSite,
     path: "/",
   });
 }
@@ -116,7 +137,11 @@ function requireRole(...allowedRoles) {
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    database: isSupabaseConfigured ? "supabase" : "local-storage",
+    database: isSupabaseConfigured
+      ? "supabase"
+      : isPgConfigured
+      ? "render-postgresql"
+      : "local-storage",
     timestamp: new Date().toISOString(),
   });
 });
@@ -416,6 +441,6 @@ app.delete("/api/admin/users/:id", authenticateUser, requireRole("admin"), async
 // Start Server
 app.listen(PORT, () => {
   console.log(`[EasyEvent] Node.js backend server listening on http://127.0.0.1:${PORT}`);
-  console.log(`[EasyEvent] Supabase Database Mode: ${isSupabaseConfigured ? "Connected (Live)" : "Local Fallback Store"}`);
+  console.log(`[EasyEvent] Database Mode: ${isSupabaseConfigured ? "Connected (Supabase)" : isPgConfigured ? "Connected (Render PostgreSQL)" : "Local Fallback Store"}`);
 });
 

@@ -31,8 +31,11 @@ export class ApiError extends Error {
   }
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const response = await fetch(url, {
     ...init,
     credentials: "include",
     headers: {
