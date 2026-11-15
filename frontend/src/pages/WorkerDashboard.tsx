@@ -38,6 +38,27 @@ import { StatCard } from "../components/common/StatCard";
 
 type ShiftFilter = "all" | "upcoming" | "completed";
 
+function parseSupervisor(rawSupervisor?: string) {
+  const defaultPhone = "+91 98450 11223";
+  if (!rawSupervisor) {
+    return { name: "Ananya Rao (Event Organizer)", phone: defaultPhone };
+  }
+  const match = rawSupervisor.match(/(\+91[\s\d-]{9,14}|\b\d{10}\b)/);
+  if (match) {
+    const phone = match[0].trim();
+    let name = rawSupervisor.replace(match[0], "").replace(/[()·,📞]/g, "").trim();
+    if (!name.toLowerCase().includes("organizer")) {
+      name = `${name} (Organizer)`;
+    }
+    return { name, phone };
+  }
+  let cleanName = rawSupervisor.replace(/[()·,📞]/g, "").trim();
+  if (!cleanName.toLowerCase().includes("organizer")) {
+    cleanName = `${cleanName} (Organizer)`;
+  }
+  return { name: cleanName, phone: defaultPhone };
+}
+
 export function WorkerDashboard({ navigate }: { navigate: (route: string) => void }) {
   const { currentUser, appData, publicEvents, updateShift, updateAvailability, applyForShift } = useAuth();
   const { t } = useLanguage();
@@ -289,7 +310,6 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                     <th>{t("col_date")}</th>
                     <th>{t("col_duty")}</th>
                     <th>{t("col_hours")}</th>
-                    <th>{t("col_rate")}</th>
                     <th>{t("col_payout")}</th>
                     <th>{t("col_status")}</th>
                   </tr>
@@ -329,7 +349,6 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                             {shift.reporting} - {shift.endTime || shift.end_time || "05:00 PM"}
                           </div>
                         </td>
-                        <td>₹{rate}/hr</td>
                         <td>
                           <span className="ledger-payout-cell">
                             ₹{payout.toLocaleString("en-IN")}
@@ -465,6 +484,11 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
 
             // Match private briefing from event organizer (Strictly for attending crew only)
             const privateBriefing = shift.crew_briefing || matchedEvent?.crew_briefing;
+            const sup = parseSupervisor(shift.supervisor);
+            const cleanPhone = sup.phone.replace(/[\s-]/g, "");
+            const mapDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+              `${shift.venue}, ${shift.address}`
+            )}&travelmode=driving`;
 
             return (
               <Card key={shift.id} variant="default" className="shift-item-card">
@@ -505,7 +529,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                         </span>
                       ) : (
                         <span className="shift-card-payout-badge estimated">
-                          <IndianRupee size={12} /> Expected: ₹{payout.toLocaleString("en-IN")} (₹{rate}/hr · {hours}h)
+                          <IndianRupee size={12} /> Expected: ₹{payout.toLocaleString("en-IN")} ({hours}h)
                         </span>
                       )}
                     </div>
@@ -531,10 +555,18 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                     <span className="detail-sub">{shift.address}</span>
                   </div>
                   <div className="shift-detail-item">
-                    <span className="detail-label">Supervisor / On-Site Lead</span>
-                    <span className="detail-value supervisor-row">
-                      <Phone size={14} /> {shift.supervisor}
-                    </span>
+                    <span className="detail-label">Supervisor (Event Organizer)</span>
+                    <div className="supervisor-row-box">
+                      <span className="supervisor-name-title">{sup.name}</span>
+                      <a
+                        href={`tel:${cleanPhone}`}
+                        className="supervisor-phone-pill"
+                        title={`Call Supervisor ${sup.name}`}
+                      >
+                        <Phone size={13} />
+                        <span>{sup.phone}</span>
+                      </a>
+                    </div>
                   </div>
                 </div>
 
@@ -578,21 +610,36 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                   </Button>
 
                   <a
-                    className="btn btn-ghost btn-sm external-dir-link"
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-                      `${shift.venue}, ${shift.address}`
-                    )}`}
+                    className="btn btn-primary btn-sm start-nav-action-btn"
+                    href={mapDirectionsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    title="Start live GPS navigation to venue in Google Maps"
                   >
                     <Navigation size={14} />
-                    <span>{t("btn_directions")}</span>
+                    <span>Start Navigation</span>
                     <ExternalLink size={12} />
                   </a>
                 </div>
 
                 {isMapOpen && (
                   <div className="shift-map-container animate-fade-in">
+                    <div className="map-quick-start-bar">
+                      <div className="map-venue-tag">
+                        <MapPin size={15} style={{ color: "var(--primary)" }} />
+                        <span><strong>{shift.venue}</strong> · {shift.address}</span>
+                      </div>
+                      <a
+                        className="btn btn-primary btn-sm map-start-button"
+                        href={mapDirectionsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Start live navigation in Google Maps"
+                      >
+                        <Navigation size={14} />
+                        <span>Start</span>
+                      </a>
+                    </div>
                     <iframe
                       title={`Venue map for ${shift.venue}`}
                       src={`https://maps.google.com/maps?q=${encodeURIComponent(
@@ -653,7 +700,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                   <div className="event-card-badges-row">
                     <span className="event-duty-tag">{evt.duty}</span>
                     <span className="event-payout-rate-badge">
-                      ₹{rate}/hr · ~₹{estPayout.toLocaleString("en-IN")}
+                      ~₹{estPayout.toLocaleString("en-IN")} payout
                     </span>
                   </div>
 

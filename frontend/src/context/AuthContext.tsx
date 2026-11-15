@@ -211,12 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role === "worker"
           ? "WorkerPassword2026!"
           : role === "organizer"
-          ? "OrganizerPassword2026!"
-          : "AdminPassword2026!";
+            ? "OrganizerPassword2026!"
+            : "AdminPassword2026!";
 
       try {
         localStorage.setItem("easyevent_has_account", "true");
-      } catch {}
+      } catch { }
 
       if (isBackendConnected) {
         try {
@@ -263,19 +263,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateAvailability = useCallback(
     async (change: { available?: boolean; availableDates?: string[] }) => {
+      // 1. Instant optimistic state update (0ms UI response)
+      setAppData((prev) => {
+        const nextAvail = change.available !== undefined ? change.available : prev.available;
+        const nextDates = change.availableDates !== undefined ? change.availableDates : prev.availableDates;
+        return {
+          ...prev,
+          available: nextAvail,
+          availableDates: nextDates,
+          users: prev.users.map((u) =>
+            u.id === currentUser?.id || u.email.toLowerCase() === currentUser?.email.toLowerCase()
+              ? { ...u, available: nextAvail, availableDates: nextDates }
+              : u
+          ),
+        };
+      });
+
+      // 2. Non-blocking background sync to backend
       if (isBackendConnected) {
-        await api.updateAvailability(change);
-        await refreshState();
-        return;
+        api.updateAvailability(change).catch((err) => {
+          console.warn("Could not sync availability to backend", err);
+        });
       }
-      setAppData((prev) => ({
-        ...prev,
-        available: change.available !== undefined ? change.available : prev.available,
-        availableDates:
-          change.availableDates !== undefined ? change.availableDates : prev.availableDates,
-      }));
     },
-    [isBackendConnected, refreshState]
+    [isBackendConnected, currentUser]
   );
 
   const applyForShift = useCallback(

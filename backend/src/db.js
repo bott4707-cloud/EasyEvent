@@ -150,7 +150,7 @@ const INITIAL_SHIFTS = [
     reporting: "08:30 AM",
     end_time: "05:00 PM",
     duty: "Stage Support / AV",
-    supervisor: "Suresh Gowda (Ops Manager)",
+    supervisor: "Suresh Gowda (Event Organizer) · +91 98450 11223",
     status: "Completed",
   },
   {
@@ -164,7 +164,7 @@ const INITIAL_SHIFTS = [
     reporting: "4:00 PM",
     end_time: "10:00 PM",
     duty: "Ushering",
-    supervisor: "Pradeep (Lead Supervisor)",
+    supervisor: "Pradeep (Event Organizer) · +91 98450 12345",
     status: "Assigned",
   },
   {
@@ -178,7 +178,7 @@ const INITIAL_SHIFTS = [
     reporting: "8:00 AM",
     end_time: "3:00 PM",
     duty: "Guest relations",
-    supervisor: "Sarah (Floor Lead)",
+    supervisor: "Sarah (Event Organizer) · +91 97410 56789",
     status: "Assigned",
   },
   {
@@ -192,7 +192,7 @@ const INITIAL_SHIFTS = [
     reporting: "5:30 AM",
     end_time: "10:00 AM",
     duty: "Guest relations",
-    supervisor: "Karthik (Race Coordinator)",
+    supervisor: "Karthik (Event Organizer) · +91 99000 88776",
     status: "Completed",
   },
 ];
@@ -212,7 +212,27 @@ const memoryStore = {
       password_salt: defaultWorkerHash.salt,
       password_hash: defaultWorkerHash.hash,
       available: true,
-      available_dates: ["2026-11-14", "2026-11-15", "2026-11-21"],
+      available_dates: ["2026-11-15", "2026-11-16", "2026-11-21", "2026-11-22"],
+    },
+    {
+      id: "demo-worker-2",
+      name: "Pooja Hegde",
+      email: "pooja.crew@easyevent.in",
+      role: "worker",
+      password_salt: defaultWorkerHash.salt,
+      password_hash: defaultWorkerHash.hash,
+      available: true,
+      available_dates: ["2026-11-15", "2026-11-17", "2026-11-18", "2026-11-19"],
+    },
+    {
+      id: "demo-worker-3",
+      name: "Vikram Sen",
+      email: "vikram.crew@easyevent.in",
+      role: "worker",
+      password_salt: defaultWorkerHash.salt,
+      password_hash: defaultWorkerHash.hash,
+      available: false,
+      available_dates: [],
     },
     {
       id: "demo-org-1",
@@ -558,8 +578,11 @@ export async function getDashboardState(user) {
         requests = rRes.data || [];
         shifts = sRes.data || [];
       } else if (role === "organizer") {
-        const [eRes, rRes, sRes] = await withTimeout(
+        const [uRes, eRes, rRes, sRes] = await withTimeout(
           Promise.all([
+            isTableAvailable("users")
+              ? supabase.from("users").select("id, name, email, role, available, available_dates").eq("role", "worker").order("name")
+              : Promise.resolve({ data: [] }),
             supabase.from("events").select("*").or(`owner_id.eq.${user.id},owner_id.is.null`).order("date"),
             isTableAvailable("staffing_requests")
               ? supabase.from("staffing_requests").select("*").eq("organizer_id", user.id).order("created_at", { ascending: false })
@@ -568,9 +591,22 @@ export async function getDashboardState(user) {
           ]),
           1500
         );
+        if (uRes.error) handleSupabaseError("users", uRes.error);
         if (eRes.error) handleSupabaseError("events", eRes.error);
         if (rRes.error) handleSupabaseError("staffing_requests", rRes.error);
         if (sRes.error) handleSupabaseError("shifts", sRes.error);
+        users = (uRes.data || []).map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          available: Boolean(u.available),
+          availableDates: Array.isArray(u.available_dates)
+            ? u.available_dates
+            : typeof u.available_dates === "string"
+              ? JSON.parse(u.available_dates || "[]")
+              : [],
+        }));
         events = eRes.data || [];
         requests = rRes.data || [];
         const eventIds = new Set(events.map((e) => e.id));
@@ -602,6 +638,20 @@ export async function getDashboardState(user) {
       requests = memoryStore.requests;
       shifts = memoryStore.shifts;
     } else if (role === "organizer") {
+      users = memoryStore.users
+        .filter((u) => u.role === "worker")
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          available: Boolean(u.available),
+          availableDates: Array.isArray(u.available_dates)
+            ? u.available_dates
+            : typeof u.available_dates === "string"
+              ? JSON.parse(u.available_dates || "[]")
+              : [],
+        }));
       events = memoryStore.events.filter((e) => e.owner_id === user.id || !e.owner_id);
       requests = memoryStore.requests.filter((r) => r.organizer_id === user.id);
       const eventIds = new Set(events.map((e) => e.id));
@@ -837,7 +887,7 @@ export async function applyForEvent(workerId, eventId, duty) {
     end_time: "06:00 PM",
     endTime: "06:00 PM",
     duty: duty || event.duty,
-    supervisor: "Pradeep (Lead Supervisor)",
+    supervisor: "Ananya Rao (Event Organizer) · +91 98450 11223",
     status: "Accepted",
     images: Array.isArray(event.images) ? event.images : [],
     crew_briefing: event.crew_briefing || "",

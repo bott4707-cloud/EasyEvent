@@ -9,6 +9,8 @@ export interface Account {
   name: string;
   email: string;
   role: Role;
+  available?: boolean;
+  availableDates?: string[];
 }
 
 export interface Event {

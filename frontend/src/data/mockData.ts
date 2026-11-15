@@ -255,7 +255,30 @@ export const INITIAL_REQUESTS: StaffingRequest[] = [
 ];
 
 export const INITIAL_USERS: Account[] = [
-  { id: "worker-demo", name: "Rohan Verma", email: "worker@easyevent.in", role: "worker" },
+  {
+    id: "worker-demo",
+    name: "Rohan Verma",
+    email: "worker@easyevent.in",
+    role: "worker",
+    available: true,
+    availableDates: ["2026-11-15", "2026-11-16", "2026-11-21", "2026-11-22"],
+  },
+  {
+    id: "worker-pooja",
+    name: "Pooja Hegde",
+    email: "pooja.crew@easyevent.in",
+    role: "worker",
+    available: true,
+    availableDates: ["2026-11-15", "2026-11-17", "2026-11-18", "2026-11-19"],
+  },
+  {
+    id: "worker-vikram",
+    name: "Vikram Sen",
+    email: "vikram.crew@easyevent.in",
+    role: "worker",
+    available: false,
+    availableDates: [],
+  },
   { id: "organizer-demo", name: "Ananya Rao", email: "organizer@easyevent.in", role: "organizer" },
   { id: "admin-demo", name: "Mehul Admin", email: "admin@easyevent.in", role: "admin" },
 ];

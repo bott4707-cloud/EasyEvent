@@ -17,12 +17,15 @@ import {
   Camera,
   Lock,
   Edit3,
+  UserCheck,
+  UserX,
+  CalendarDays,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { LanguageSelector } from "../components/common/LanguageSelector";
-import { DUTIES, formatDate, formatTime, getDutyHourlyRate } from "../data/mockData";
+import { DUTIES, formatDate, formatTime, getDutyHourlyRate, dateKey } from "../data/mockData";
 import { type Event } from "../types";
 import { Button } from "../components/common/Button";
 import { Card } from "../components/common/Card";
@@ -165,6 +168,9 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
   const assignedCrewShifts = appData.shifts.filter(
     (s) => (s.event_id && myEvents.some((e) => e.id === s.event_id)) || eventTitles.has(s.title)
   );
+
+  const registeredWorkers = appData.users.filter((u) => u.role === "worker");
+  const today = new Date();
 
   // Handle local image file upload (1 or 2 images)
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -605,6 +611,85 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
           {myRequests.length === 0 && (
             <Card className="empty-requests-card" style={{ padding: 24, textAlign: "center" }}>
               <p className="muted-text">No active crew staffing requests at this time.</p>
+            </Card>
+          )}
+        </div>
+      </section>
+
+      {/* Live Crew Availability & Weekly Roster Feed */}
+      <section className="crew-availability-roster-section" style={{ marginTop: 40 }}>
+        <div className="section-filter-bar">
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <h2 className="section-title-md">Crew Availability & Weekly Roster</h2>
+              <span className="live-roster-pill">
+                <span className="pulse-indicator-dot" />
+                {registeredWorkers.filter((w) => w.available).length} of {registeredWorkers.length} Available for Duty
+              </span>
+            </div>
+            <p className="muted-text">
+              Real-time crew availability status and 7-day schedule to staff upcoming events.
+            </p>
+          </div>
+        </div>
+
+        <div className="crew-roster-cards-grid">
+          {registeredWorkers.map((worker) => {
+            const isAvail = Boolean(worker.available);
+            const workerDates = worker.availableDates || [];
+
+            return (
+              <Card key={worker.id} variant="default" className="crew-roster-worker-card">
+                <div className="roster-worker-header">
+                  <div className="roster-worker-profile">
+                    <div className={`roster-avatar-bubble ${isAvail ? "active" : "off"}`}>
+                      {isAvail ? <UserCheck size={18} /> : <UserX size={18} />}
+                    </div>
+                    <div>
+                      <h4 className="roster-worker-name">{worker.name}</h4>
+                      <span className="roster-worker-email">{worker.email}</span>
+                    </div>
+                  </div>
+                  <span className={`roster-status-badge ${isAvail ? "available" : "unavailable"}`}>
+                    <span className="status-indicator-dot" />
+                    {isAvail ? "Available" : "Temporarily Unavailable"}
+                  </span>
+                </div>
+
+                <div className="roster-weekly-calendar">
+                  <span className="roster-calendar-label">
+                    <CalendarDays size={13} /> 7-Day Schedule Roster:
+                  </span>
+                  <div className="roster-days-row">
+                    {Array.from({ length: 7 }, (_, i) => {
+                      const d = new Date(today);
+                      d.setDate(today.getDate() + i);
+                      const key = dateKey(d);
+                      const isSelected = workerDates.includes(key);
+
+                      return (
+                        <div
+                          key={key}
+                          className={`roster-day-cell ${isSelected && isAvail ? "on-duty" : "off-duty"}`}
+                          title={`${worker.name}: ${isSelected && isAvail ? "Available" : "Off-duty"} on ${formatDate(key)}`}
+                        >
+                          <span className="cell-day-name">
+                            {new Intl.DateTimeFormat("en", { weekday: "narrow" }).format(d)}
+                          </span>
+                          <span className="cell-day-num">{d.getDate()}</span>
+                          <span className="cell-duty-dot" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+
+          {registeredWorkers.length === 0 && (
+            <Card className="empty-requests-card" style={{ padding: 24, textAlign: "center" }}>
+              <p className="muted-text">No registered crew members in directory yet.</p>
             </Card>
           )}
         </div>
