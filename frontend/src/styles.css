@@ -2532,90 +2532,6 @@ h6 {
   color: var(--primary-hover);
 }
 
-/* 1-Click Demo Test Drive */
-.demo-credentials-box {
-  margin-top: 20px;
-  padding: 14px 16px;
-  background: var(--surface-muted);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.demo-box-title {
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: var(--ink-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.demo-buttons-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.demo-pill-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
-  background: #ffffff;
-  font-family: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--ink);
-  cursor: pointer;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  text-align: center;
-}
-
-.demo-pill-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.demo-pill-btn.worker:hover {
-  background: var(--primary-light);
-  color: var(--primary);
-  border-color: #bfdbfe;
-}
-
-.demo-pill-btn.organizer:hover {
-  background: var(--organizer-light);
-  color: var(--organizer);
-  border-color: #ddd6fe;
-}
-
-.demo-pill-btn.admin:hover {
-  background: #f1f5f9;
-  color: var(--ink);
-  border-color: #cbd5e1;
-}
-
-.demo-pill-btn:disabled,
-.demo-pill-btn.loading {
-  opacity: 0.7;
-  cursor: wait;
-  pointer-events: none;
-  transform: none;
-  box-shadow: none;
-}
-
 /* ==========================================================================
    Footer
    ========================================================================== */
@@ -3351,19 +3267,6 @@ h6 {
   .auth-role-tabs .role-tab-btn {
     width: 100%;
     justify-content: center;
-  }
-  .demo-buttons-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-  .demo-pill-btn {
-    width: 100%;
-    padding: 8px 6px;
-    font-size: 0.8rem;
-    text-align: center;
-    justify-content: center;
-    white-space: nowrap;
   }
   .venue-place-photos-banner {
     height: 140px;
