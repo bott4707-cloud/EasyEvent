@@ -422,6 +422,7 @@ export async function createUser(userData) {
     id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name: userData.name,
     email: normalizedEmail,
+    phone: userData.phone || null,
     role: userData.role,
     password_salt: userData.password_salt,
     password_hash: userData.password_hash,
@@ -434,19 +435,23 @@ export async function createUser(userData) {
 
   if (isSupabaseConfigured && isTableAvailable("users")) {
     try {
+      const insertPayload = {
+        id: user.id,
+        name: userData.name,
+        email: normalizedEmail,
+        role: userData.role,
+        password_salt: userData.password_salt,
+        password_hash: userData.password_hash,
+        available: false,
+        available_dates: [],
+      };
+      if (userData.phone) {
+        insertPayload.phone = userData.phone;
+      }
       const { data, error } = await withTimeout(
         supabase
           .from("users")
-          .insert({
-            id: user.id,
-            name: userData.name,
-            email: normalizedEmail,
-            role: userData.role,
-            password_salt: userData.password_salt,
-            password_hash: userData.password_hash,
-            available: false,
-            available_dates: [],
-          })
+          .insert(insertPayload)
           .select()
           .single(),
         1500
@@ -485,13 +490,13 @@ export async function createSession(tokenHash, userId, expiresAt) {
       .then(({ error }) => {
         if (error) handleSupabaseError("sessions", error);
       })
-      .catch(() => {});
+      .catch(() => { });
   }
 }
 
 export async function getUserBySession(tokenHash) {
   const now = Math.floor(Date.now() / 1000);
-  
+
   // 1. Check in-memory active sessions first (instant: 0ms)
   const sess = memoryStore.sessions.find(
     (s) => s.token_hash === tokenHash && s.expires_at > now
@@ -539,7 +544,7 @@ export async function deleteSession(tokenHash) {
       .then(({ error }) => {
         if (error) handleSupabaseError("sessions", error);
       })
-      .catch(() => {});
+      .catch(() => { });
   }
 }
 

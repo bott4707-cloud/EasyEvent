@@ -47,7 +47,7 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
             <button
               type="button"
               className="brand-logo"
-              onClick={() => handleNav("/")}
+              onClick={() => handleNav(currentUser ? `/${currentUser.role}` : "/")}
               aria-label="EasyEvent Home"
             >
               <div className="brand-icon-wrapper">
@@ -62,13 +62,16 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
 
           {/* Desktop Nav - Strictly Isolated per User Role */}
           <nav className="desktop-nav" aria-label="Main Navigation">
-            <button
-              type="button"
-              className={`nav-item ${currentPath === "/" ? "active" : ""}`}
-              onClick={() => handleNav("/")}
-            >
-              {t("nav_home")}
-            </button>
+            {/* Once user enters their dashboard, do not show Home */}
+            {!currentUser && (
+              <button
+                type="button"
+                className={`nav-item ${currentPath === "/" ? "active" : ""}`}
+                onClick={() => handleNav("/")}
+              >
+                {t("nav_home")}
+              </button>
+            )}
 
             {/* STRICT ACCESS ISOLATION: Only display the panel belonging to the active role */}
             {currentUser?.role === "worker" && (
@@ -118,26 +121,28 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
 
             {currentUser ? (
               <div className="user-nav-actions">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={
-                    currentUser.role === "admin" ? (
-                      <Shield size={16} />
-                    ) : currentUser.role === "organizer" ? (
-                      <Sparkles size={16} />
-                    ) : (
-                      <Briefcase size={16} />
-                    )
-                  }
-                  onClick={() => handleNav(`/${currentUser.role}`)}
-                >
-                  {currentUser.role === "admin"
-                    ? t("nav_admin")
-                    : currentUser.role === "organizer"
-                    ? t("nav_organizer_studio")
-                    : t("nav_crews_dash")}
-                </Button>
+                {currentPath !== `/${currentUser.role}` && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={
+                      currentUser.role === "admin" ? (
+                        <Shield size={16} />
+                      ) : currentUser.role === "organizer" ? (
+                        <Sparkles size={16} />
+                      ) : (
+                        <Briefcase size={16} />
+                      )
+                    }
+                    onClick={() => handleNav(`/${currentUser.role}`)}
+                  >
+                    {currentUser.role === "admin"
+                      ? t("nav_admin")
+                      : currentUser.role === "organizer"
+                      ? t("nav_organizer_studio")
+                      : t("nav_crews_dash")}
+                  </Button>
+                )}
 
                 <div className="user-profile-pill">
                   <User size={15} className="user-icon" />

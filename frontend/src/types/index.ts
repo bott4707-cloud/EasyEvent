@@ -14,6 +14,7 @@ export interface Account {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: Role;
   available?: boolean;
   availableDates?: string[];

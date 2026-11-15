@@ -3,6 +3,8 @@ import {
   Lock,
   Mail,
   User,
+  Phone,
+  AlertCircle,
   Briefcase,
   Sparkles,
   Eye,
@@ -48,6 +50,7 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
   const [role, setRole] = useState<Role>(initialRole);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -87,6 +90,12 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
           setLoading(false);
           return;
         }
+        const cleanPhone = phone.trim().replace(/\D/g, "");
+        if (cleanPhone.length !== 10) {
+          showToast("Please enter a valid 10-digit mobile phone number.", "error");
+          setLoading(false);
+          return;
+        }
         if (password !== confirmPassword) {
           showToast("Passwords do not match.", "error");
           setLoading(false);
@@ -101,6 +110,7 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
         const user = await signup({
           name: name.trim(),
           email: cleanEmail,
+          phone: cleanPhone,
           password,
           role,
         });
@@ -201,6 +211,26 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+
+            {mode === "signup" && (
+              <div className="auth-phone-field-group">
+                <Input
+                  label="Phone Number"
+                  type="tel"
+                  placeholder="e.g. 9845011223"
+                  icon={<Phone size={16} />}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  required
+                />
+                <div className="upi-notice-alert-bar">
+                  <AlertCircle size={15} className="upi-alert-icon" />
+                  <span className="upi-alert-text">
+                    Use that Number which is Connected to your UPI id only
+                  </span>
+                </div>
+              </div>
+            )}
 
             <Input
               label={t("label_password")}

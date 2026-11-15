@@ -164,7 +164,7 @@ app.get("/api/events/public", async (_req, res) => {
 
 app.post("/api/auth/signup", async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, phone } = req.body;
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(422).json({ detail: "Enter a valid email address." });
@@ -189,6 +189,7 @@ app.post("/api/auth/signup", async (req, res) => {
     const user = await createUser({
       name: name.trim(),
       email: normalizedEmail,
+      phone: phone ? String(phone).trim() : null,
       role,
       password_salt: salt,
       password_hash: hash,

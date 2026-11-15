@@ -9,6 +9,7 @@ export interface SignupInput {
   name: string;
   email: string;
   password: string;
+  phone?: string;
   role: Exclude<Role, "admin">;
 }
 

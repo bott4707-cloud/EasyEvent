@@ -183,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: `user-${Date.now()}`,
         name: input.name,
         email: input.email.toLowerCase(),
+        phone: input.phone,
         role: input.role,
       };
       setAppData((prev) => ({
