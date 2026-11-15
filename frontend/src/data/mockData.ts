@@ -1,4 +1,4 @@
-import type { Event, Shift, StaffingRequest, Account, Venue } from "../types";
+import type { Event, Shift, ShiftStatus, StaffingRequest, Account, Venue } from "../types";
 
 export const DUTIES = [
   "Registration & check-in",
@@ -335,6 +335,150 @@ export function getShiftCancellationEligibility(shiftDate: string, reportingTime
       message: `Event is on-site or completed. Cancellation is closed.`,
     };
   }
+}
+
+export interface AutoShiftProgressInfo {
+  effectiveStatus: ShiftStatus;
+  statusBadgeText: string;
+  isCancelled: boolean;
+  isDidNotAttend: boolean;
+  isUpcomingBooked: boolean;
+  isOngoingReporting: boolean;
+  isCompletedEvent: boolean;
+  stepIndex: number;
+  steps: {
+    key: string;
+    label: string;
+    desc: string;
+    isDone: boolean;
+    isCurrent: boolean;
+  }[];
+  timeCaption: string;
+}
+
+export function getAutoShiftProgress(shift: {
+  date: string;
+  reporting?: string;
+  endTime?: string;
+  end_time?: string;
+  status: ShiftStatus;
+  attended?: boolean | null;
+}): AutoShiftProgressInfo {
+  const isCancelled = shift.status === "Cancelled";
+  const isDidNotAttend = shift.status === "Did Not Attend" || shift.attended === false;
+
+  const parseTime = (timeStr?: string, defaultH = 9, defaultM = 0) => {
+    if (!timeStr) return { hours: defaultH, minutes: defaultM };
+    const raw = timeStr.replace(/[^0-9:]/g, "").split(":");
+    let hours = parseInt(raw[0], 10);
+    const minutes = parseInt(raw[1], 10) || 0;
+    if (isNaN(hours)) hours = defaultH;
+    const isPM = timeStr.toLowerCase().includes("pm");
+    const isAM = timeStr.toLowerCase().includes("am");
+    if (isPM && hours < 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+    return { hours, minutes };
+  };
+
+  const { hours: startH, minutes: startM } = parseTime(shift.reporting, 9, 0);
+  const startDateTime = new Date(`${shift.date}T${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}:00`);
+
+  const { hours: endH, minutes: endM } = parseTime(shift.endTime || shift.end_time || "05:00 PM", 17, 0);
+  const endDateTime = new Date(`${shift.date}T${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}:00`);
+
+  const now = new Date();
+
+  if (isCancelled) {
+    return {
+      effectiveStatus: "Cancelled",
+      statusBadgeText: "Shift Cancelled",
+      isCancelled: true,
+      isDidNotAttend: false,
+      isUpcomingBooked: false,
+      isOngoingReporting: false,
+      isCompletedEvent: false,
+      stepIndex: 0,
+      steps: [],
+      timeCaption: "Cancelled by crew member",
+    };
+  }
+
+  if (isDidNotAttend) {
+    return {
+      effectiveStatus: "Did Not Attend",
+      statusBadgeText: "Did Not Attend",
+      isCancelled: false,
+      isDidNotAttend: true,
+      isUpcomingBooked: false,
+      isOngoingReporting: false,
+      isCompletedEvent: false,
+      stepIndex: 0,
+      steps: [],
+      timeCaption: "Marked no-show by organizer · Payout delayed",
+    };
+  }
+
+  // Automatic Time-Based Progression
+  if (now < startDateTime) {
+    // Before event start: Assigned & Booked are automatically verified/checked
+    return {
+      effectiveStatus: "Accepted",
+      statusBadgeText: "Booked & Confirmed",
+      isCancelled: false,
+      isDidNotAttend: false,
+      isUpcomingBooked: true,
+      isOngoingReporting: false,
+      isCompletedEvent: false,
+      stepIndex: 1,
+      steps: [
+        { key: "Assigned", label: "Assigned", desc: "Auto Verified", isDone: true, isCurrent: false },
+        { key: "Booked", label: "Booked", desc: "Auto Checked", isDone: true, isCurrent: true },
+        { key: "Reporting", label: "Reporting", desc: `Starts ${shift.reporting || "09:00 AM"}`, isDone: false, isCurrent: false },
+        { key: "Completed", label: "Completed Event", desc: `Ends ${shift.endTime || shift.end_time || "05:00 PM"}`, isDone: false, isCurrent: false },
+      ],
+      timeCaption: `Starts at ${shift.reporting || "09:00 AM"}`,
+    };
+  }
+
+  if (now >= startDateTime && now < endDateTime) {
+    // Event start reached: Automatically active On-Site / Reporting
+    return {
+      effectiveStatus: "Reporting",
+      statusBadgeText: "On-Site Reporting Active",
+      isCancelled: false,
+      isDidNotAttend: false,
+      isUpcomingBooked: false,
+      isOngoingReporting: true,
+      isCompletedEvent: false,
+      stepIndex: 2,
+      steps: [
+        { key: "Assigned", label: "Assigned", desc: "Auto Verified", isDone: true, isCurrent: false },
+        { key: "Booked", label: "Booked", desc: "Auto Checked", isDone: true, isCurrent: false },
+        { key: "Reporting", label: "Reporting", desc: "Active On Site", isDone: true, isCurrent: true },
+        { key: "Completed", label: "Completed Event", desc: `Ends ${shift.endTime || shift.end_time || "05:00 PM"}`, isDone: false, isCurrent: false },
+      ],
+      timeCaption: `On-site duty in progress until ${shift.endTime || shift.end_time || "05:00 PM"}`,
+    };
+  }
+
+  // Event ending time reached: Automatically Completed Event
+  return {
+    effectiveStatus: "Completed",
+    statusBadgeText: "Completed Event",
+    isCancelled: false,
+    isDidNotAttend: false,
+    isUpcomingBooked: false,
+    isOngoingReporting: false,
+    isCompletedEvent: true,
+    stepIndex: 3,
+    steps: [
+      { key: "Assigned", label: "Assigned", desc: "Auto Verified", isDone: true, isCurrent: false },
+      { key: "Booked", label: "Booked", desc: "Auto Checked", isDone: true, isCurrent: false },
+      { key: "Reporting", label: "Reporting", desc: "Duty Attended", isDone: true, isCurrent: false },
+      { key: "Completed", label: "Completed Event", desc: "Auto Completed ✓", isDone: true, isCurrent: true },
+    ],
+    timeCaption: `Event completed at ${shift.endTime || shift.end_time || "05:00 PM"}`,
+  };
 }
 
 export function formatTime(value: string): string {

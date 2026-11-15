@@ -33,8 +33,9 @@ import {
   getDutyHourlyRate,
   parseShiftHours,
   getShiftCancellationEligibility,
+  getAutoShiftProgress,
 } from "../data/mockData";
-import type { Shift, ShiftStatus } from "../types";
+import type { Shift } from "../types";
 import { Button } from "../components/common/Button";
 import { Card } from "../components/common/Card";
 import { Badge } from "../components/common/Badge";
@@ -69,7 +70,6 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
     currentUser,
     appData,
     publicEvents,
-    updateShift,
     updateAvailability,
     applyForShift,
     cancelWorkerShift,
@@ -158,18 +158,25 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
     );
   }
 
-  const isUpcoming = (shift: Shift) =>
-    shift.date >= todayKey && shift.status !== "Completed" && shift.status !== "Cancelled";
+  const isUpcoming = (shift: Shift) => {
+    const prog = getAutoShiftProgress(shift);
+    return !prog.isCompletedEvent && !prog.isCancelled && !prog.isDidNotAttend;
+  };
+
+  const isCompleted = (shift: Shift) => {
+    const prog = getAutoShiftProgress(shift);
+    return prog.isCompletedEvent;
+  };
 
   const visibleShifts = appData.shifts
     .filter((s) => {
       if (filter === "upcoming") return isUpcoming(s);
-      if (filter === "completed") return s.status === "Completed";
+      if (filter === "completed") return isCompleted(s);
       return true;
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const completedShifts = appData.shifts.filter((s) => s.status === "Completed");
+  const completedShifts = appData.shifts.filter(isCompleted);
   const upcomingCount = appData.shifts.filter(isUpcoming).length;
   const completedCount = completedShifts.length;
 
@@ -180,10 +187,11 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
     return total + parseShiftHours(shift.reporting, shift.endTime || shift.end_time || "05:00 PM");
   }, 0);
 
-  // Shifts attended today
-  const attendedTodayShifts = appData.shifts.filter(
-    (s) => s.date === todayKey && (s.status === "Completed" || s.status === "Reporting")
-  );
+  // Shifts attended / ongoing today
+  const attendedTodayShifts = appData.shifts.filter((s) => {
+    const prog = getAutoShiftProgress(s);
+    return s.date === todayKey && (prog.isCompletedEvent || prog.isOngoingReporting);
+  });
 
   const todayDailyEarnings = attendedTodayShifts.reduce((acc, shift) => {
     const hours = parseShiftHours(shift.reporting, shift.endTime || shift.end_time || "05:00 PM");
@@ -198,9 +206,12 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
     return acc + Math.round(hours * rate);
   }, 0);
 
-  // All attended events for the Ledger
+  // All attended events for the Ledger (completed or active on duty)
   const attendedLedgerShifts = appData.shifts
-    .filter((s) => s.status === "Completed" || s.status === "Reporting")
+    .filter((s) => {
+      const prog = getAutoShiftProgress(s);
+      return prog.isCompletedEvent || prog.isOngoingReporting;
+    })
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const handleToggleDate = async (key: string) => {
@@ -211,15 +222,6 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
 
     await updateAvailability({ availableDates: updated });
     showToast("Weekly availability dates updated.");
-  };
-
-  const handleStatusProgression = async (shift: Shift, nextStatus: ShiftStatus) => {
-    try {
-      await updateShift(shift.id, nextStatus);
-      showToast(`Shift status updated to "${nextStatus}".`);
-    } catch {
-      showToast("Could not update shift status.", "error");
-    }
   };
 
   const handleApply = async (eventId: string, duty: string) => {
@@ -257,19 +259,6 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
       showToast(msg, "error");
     } finally {
       setIsCancelling(false);
-    }
-  };
-
-  const getActionForStatus = (status: ShiftStatus): { label: string; next: ShiftStatus } | null => {
-    switch (status) {
-      case "Assigned":
-        return { label: t("btn_accept"), next: "Accepted" };
-      case "Accepted":
-        return { label: t("btn_report"), next: "Reporting" };
-      case "Reporting":
-        return { label: t("btn_complete"), next: "Completed" };
-      default:
-        return null;
     }
   };
 
@@ -549,7 +538,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
 
         <div className="shifts-list-stack">
           {visibleShifts.map((shift) => {
-            const action = getActionForStatus(shift.status);
+            const autoProgress = getAutoShiftProgress(shift);
             const isMapOpen = mapShiftId === shift.id;
             const hours = parseShiftHours(shift.reporting, shift.endTime || shift.end_time || "05:00 PM");
             const rate = getDutyHourlyRate(shift.duty);
@@ -601,19 +590,19 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                   <div className="shift-main-info">
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
                       <span className="shift-duty-pill">{shift.duty}</span>
-                      {shift.status === "Completed" ? (
+                      {autoProgress.isCompletedEvent ? (
                         <span className="shift-card-payout-badge">
                           <CheckCircle2 size={13} /> ₹{payout.toLocaleString("en-IN")} Credited
                         </span>
-                      ) : shift.status === "Reporting" ? (
+                      ) : autoProgress.isOngoingReporting ? (
                         <span className="shift-card-payout-badge in-progress">
                           <Clock size={13} /> ₹{payout.toLocaleString("en-IN")} In Progress
                         </span>
-                      ) : shift.status === "Did Not Attend" ? (
+                      ) : autoProgress.isDidNotAttend ? (
                         <span className="shift-card-payout-badge penalty">
                           <AlertTriangle size={13} /> Payout Delayed (Under Review)
                         </span>
-                      ) : shift.status === "Cancelled" ? (
+                      ) : autoProgress.isCancelled ? (
                         <span className="shift-card-payout-badge cancelled">
                           <XCircle size={13} /> Shift Cancelled
                         </span>
@@ -635,68 +624,46 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                       </span>
                     </div>
                   </div>
-                  <Badge status={shift.status} />
+                  <Badge status={autoProgress.effectiveStatus} />
                 </div>
 
-                {/* Real-time Visual Progress Stepper */}
+                {/* Real-time Visual Progress Stepper (Automatic Time-Based) */}
                 <div className="shift-realtime-stepper">
                   <div className="stepper-header-meta">
                     <span className="stepper-title-text">
                       <span className="pulse-indicator-dot" /> Live Shift Progression
                     </span>
                     <span className="stepper-time-status">
-                      {shift.status === "Completed" && "Attended & Credited"}
-                      {shift.status === "Reporting" && "On-Site Check-In Active"}
-                      {shift.status === "Accepted" && "Ready for Dispatch"}
-                      {shift.status === "Assigned" && "Slot Booked"}
-                      {shift.status === "Cancelled" && "Booking Released"}
-                      {shift.status === "Did Not Attend" && "Marked No-Show"}
+                      {autoProgress.statusBadgeText}
                     </span>
                   </div>
 
-                  {shift.status === "Cancelled" ? (
+                  {autoProgress.isCancelled ? (
                     <div className="stepper-alert-bar cancelled">
                       <XCircle size={15} />
                       <span>This shift booking was cancelled. The slot has been returned to the event crew pool.</span>
                     </div>
-                  ) : shift.status === "Did Not Attend" ? (
+                  ) : autoProgress.isDidNotAttend ? (
                     <div className="stepper-alert-bar noshow">
                       <AlertTriangle size={15} />
                       <span>Organizer marked as 'Did Not Attend'. Shift payout delayed under disciplinary review.</span>
                     </div>
                   ) : (
                     <div className="stepper-steps-track">
-                      {[
-                        { key: "Assigned", label: "Assigned", desc: "Booked" },
-                        { key: "Accepted", label: "Accepted", desc: "Confirmed" },
-                        { key: "Reporting", label: "Reporting", desc: "On Site" },
-                        { key: "Completed", label: "Completed", desc: "Verified" },
-                      ].map((step, idx) => {
-                        const stepOrder: Record<string, number> = {
-                          Assigned: 0,
-                          Accepted: 1,
-                          Reporting: 2,
-                          Completed: 3,
-                        };
-                        const curIdx = stepOrder[shift.status] ?? 0;
-                        const isDone = curIdx > idx;
-                        const isCurrent = curIdx === idx;
-
-                        return (
-                          <div
-                            key={step.key}
-                            className={`stepper-node ${isDone ? "done" : isCurrent ? "current" : "upcoming"}`}
-                          >
-                            <div className="stepper-node-marker">
-                              {isDone ? <CheckCircle2 size={13} /> : <span>{idx + 1}</span>}
-                            </div>
-                            <div className="stepper-node-text">
-                              <span className="node-label">{step.label}</span>
-                              <span className="node-desc">{step.desc}</span>
-                            </div>
+                      {autoProgress.steps.map((step, idx) => (
+                        <div
+                          key={step.key}
+                          className={`stepper-node ${step.isDone ? "done" : step.isCurrent ? "current" : "upcoming"}`}
+                        >
+                          <div className="stepper-node-marker">
+                            {step.isDone ? <CheckCircle2 size={13} /> : <span>{idx + 1}</span>}
                           </div>
-                        );
-                      })}
+                          <div className="stepper-node-text">
+                            <span className="node-label">{step.label}</span>
+                            <span className="node-desc">{step.desc}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -742,19 +709,8 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                 )}
 
                 <div className="shift-actions-row">
-                  {action && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<CheckCircle2 size={16} />}
-                      onClick={() => handleStatusProgression(shift, action.next)}
-                    >
-                      {action.label}
-                    </Button>
-                  )}
-
                   {/* 4-Hour Cancellation Policy Button */}
-                  {shift.status !== "Completed" && shift.status !== "Cancelled" && shift.status !== "Did Not Attend" && (
+                  {autoProgress.isUpcomingBooked && (
                     cancellationInfo.canCancel ? (
                       <Button
                         variant="outline"
@@ -796,7 +752,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                 </div>
 
                 {/* Cancellation notice chip */}
-                {shift.status !== "Completed" && shift.status !== "Cancelled" && shift.status !== "Did Not Attend" && cancellationInfo.canCancel && (
+                {autoProgress.isUpcomingBooked && cancellationInfo.canCancel && (
                   <div className="shift-cancellation-notice-line">
                     ⏱️ Free cancellation available until 4 hours before reporting ({cancellationInfo.hoursRemaining.toFixed(1)} hours left)
                   </div>

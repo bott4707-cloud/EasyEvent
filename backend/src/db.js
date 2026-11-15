@@ -929,8 +929,8 @@ export async function applyForEvent(workerId, eventId, duty) {
   memoryStore.shifts.unshift(newShift);
 
   if (isSupabaseConfigured && isTableAvailable("shifts")) {
-    supabase.from("shifts").insert(newShift).catch(() => {});
-    supabase.from("events").update({ assigned: event.assigned }).eq("id", eventId).catch(() => {});
+    supabase.from("shifts").insert(newShift).catch(() => { });
+    supabase.from("events").update({ assigned: event.assigned }).eq("id", eventId).catch(() => { });
   }
 
   return newShift;
@@ -976,13 +976,13 @@ export async function cancelWorkerShift(workerId, shiftId) {
     if (event) {
       event.assigned = Math.max(0, (event.assigned || 1) - 1);
       if (isSupabaseConfigured && isTableAvailable("events")) {
-        supabase.from("events").update({ assigned: event.assigned }).eq("id", event.id).catch(() => {});
+        supabase.from("events").update({ assigned: event.assigned }).eq("id", event.id).catch(() => { });
       }
     }
   }
 
   if (isSupabaseConfigured && isTableAvailable("shifts")) {
-    supabase.from("shifts").update({ status: "Cancelled" }).eq("id", shiftId).catch(() => {});
+    supabase.from("shifts").update({ status: "Cancelled" }).eq("id", shiftId).catch(() => { });
   }
 
   return { success: true, shiftId, status: "Cancelled", eventId: shift.event_id };
@@ -1026,20 +1026,20 @@ export async function verifyAttendance(shiftId, attended) {
         payment_delayed: shift.payment_delayed,
       })
       .eq("id", shiftId)
-      .catch(() => {});
+      .catch(() => { });
   }
 
   return {
     shift,
     worker: worker
       ? {
-          id: worker.id,
-          name: worker.name,
-          email: worker.email,
-          warnings: worker.warnings,
-          warningReason: worker.warning_reason,
-          suspendedUntil: worker.suspended_until,
-        }
+        id: worker.id,
+        name: worker.name,
+        email: worker.email,
+        warnings: worker.warnings,
+        warningReason: worker.warning_reason,
+        suspendedUntil: worker.suspended_until,
+      }
       : null,
   };
 }
