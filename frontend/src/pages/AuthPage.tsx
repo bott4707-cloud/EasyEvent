@@ -53,6 +53,7 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [demoLoadingRole, setDemoLoadingRole] = useState<Role | null>(null);
 
   const canSignUp = role !== "admin";
 
@@ -122,15 +123,23 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
     }
   };
 
-  const handleDemoFill = (targetRole: Role) => {
+  const handleDemoFill = async (targetRole: Role) => {
+    setDemoLoadingRole(targetRole);
     try {
       localStorage.setItem("easyevent_has_account", "true");
     } catch {
       // ignore
     }
-    demoLogin(targetRole);
-    showToast(`Logged in instantly as Demo ${targetRole.toUpperCase()}`);
-    navigate(`/${targetRole}`);
+    try {
+      const user = await demoLogin(targetRole);
+      showToast(`Logged in instantly as Demo ${targetRole.toUpperCase()}`);
+      navigate(`/${user.role}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Demo login failed.";
+      showToast(msg, "error");
+    } finally {
+      setDemoLoadingRole(null);
+    }
   };
 
   return (
@@ -296,24 +305,27 @@ export function AuthPage({ initialRole = "worker", initialMode, navigate }: Auth
             <div className="demo-buttons-row">
               <button
                 type="button"
-                className="demo-pill-btn worker"
+                className={`demo-pill-btn worker ${demoLoadingRole === "worker" ? "loading" : ""}`}
+                disabled={demoLoadingRole !== null}
                 onClick={() => handleDemoFill("worker")}
               >
-                {t("auth_testdrive_worker")}
+                {demoLoadingRole === "worker" ? "Signing In..." : t("auth_testdrive_worker")}
               </button>
               <button
                 type="button"
-                className="demo-pill-btn organizer"
+                className={`demo-pill-btn organizer ${demoLoadingRole === "organizer" ? "loading" : ""}`}
+                disabled={demoLoadingRole !== null}
                 onClick={() => handleDemoFill("organizer")}
               >
-                {t("auth_testdrive_organizer")}
+                {demoLoadingRole === "organizer" ? "Signing In..." : t("auth_testdrive_organizer")}
               </button>
               <button
                 type="button"
-                className="demo-pill-btn admin"
+                className={`demo-pill-btn admin ${demoLoadingRole === "admin" ? "loading" : ""}`}
+                disabled={demoLoadingRole !== null}
                 onClick={() => handleDemoFill("admin")}
               >
-                {t("auth_testdrive_admin")}
+                {demoLoadingRole === "admin" ? "Signing In..." : t("auth_testdrive_admin")}
               </button>
             </div>
           </div>

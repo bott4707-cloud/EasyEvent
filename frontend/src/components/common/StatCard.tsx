@@ -22,11 +22,13 @@ export function StatCard({
 }: StatCardProps) {
   return (
     <div className={`stat-card stat-color-${color}`}>
-      <div className="stat-card-top">
-        <span className="stat-card-label">{label}</span>
-        {icon && <div className="stat-card-icon">{icon}</div>}
+      <div className="stat-card-main">
+        <div className="stat-card-top">
+          <span className="stat-card-label">{label}</span>
+          {icon && <div className={`stat-card-icon-wrapper ${color}`}>{icon}</div>}
+        </div>
+        <div className="stat-card-value">{value}</div>
       </div>
-      <div className="stat-card-value">{value}</div>
       {(caption || trend) && (
         <div className="stat-card-bottom">
           {trend && (

@@ -278,13 +278,16 @@ h6 {
   align-items: center;
   background: transparent;
   border: none;
-  padding: 8px 14px;
+  padding: 0 14px;
+  height: 38px;
+  line-height: 38px;
   font-family: var(--font-display);
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--ink-secondary);
   border-radius: var(--radius-md);
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .nav-item:hover {
@@ -338,13 +341,15 @@ h6 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px;
+  height: 38px;
+  padding: 0 12px;
   border-radius: var(--radius-full);
   background: var(--surface-muted);
   border: 1px solid var(--border-subtle);
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .user-role-tag {
@@ -361,13 +366,14 @@ h6 {
 .icon-logout-btn {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: white;
   color: var(--ink-muted);
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .icon-logout-btn:hover {
@@ -389,7 +395,8 @@ h6 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  height: 38px;
+  padding: 0 12px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
   background: white;
@@ -398,6 +405,7 @@ h6 {
   color: var(--ink-secondary);
   transition: all 0.15s ease;
   box-shadow: var(--shadow-sm);
+  white-space: nowrap;
 }
 
 .lang-trigger-btn:hover,
@@ -525,8 +533,9 @@ h6 {
 }
 
 .btn-sm {
-  padding: 6px 12px;
-  font-size: 0.82rem;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 0.84rem;
 }
 
 .btn-md {
@@ -723,12 +732,13 @@ h6 {
   background: white;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 20px 22px;
+  padding: 18px 20px;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   justify-content: space-between;
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 124px;
 }
 
 .stat-card:hover {
@@ -737,9 +747,17 @@ h6 {
   border-color: #cbd5e1;
 }
 
-.stat-card-left {
+.stat-card-main {
+  width: 100%;
+}
+
+.stat-card-top {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 8px;
+  gap: 10px;
 }
 
 .stat-card-label {
@@ -749,26 +767,51 @@ h6 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--ink-muted);
-  margin-bottom: 6px;
 }
 
 .stat-card-value {
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 1.85rem;
   font-weight: 900;
   color: var(--ink);
   line-height: 1.1;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
-.stat-card-caption {
+.stat-card-bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 0.78rem;
   color: var(--ink-secondary);
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid rgba(241, 245, 249, 0.8);
+}
+
+.stat-trend {
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.stat-trend.trend-up {
+  background: var(--emerald-light);
+  color: var(--emerald-dark);
+}
+
+.stat-trend.trend-down {
+  background: var(--rose-light);
+  color: var(--rose);
+}
+
+.stat-caption {
+  color: var(--ink-muted);
 }
 
 .stat-card-icon-wrapper {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-md);
   display: grid;
   place-items: center;
@@ -2564,6 +2607,15 @@ h6 {
   border-color: #cbd5e1;
 }
 
+.demo-pill-btn:disabled,
+.demo-pill-btn.loading {
+  opacity: 0.7;
+  cursor: wait;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
 /* ==========================================================================
    Footer
    ========================================================================== */
@@ -3137,6 +3189,28 @@ h6 {
   flex: 1;
 }
 
+.mobile-drawer .language-selector-wrapper {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.mobile-drawer .lang-trigger-btn {
+  width: 100%;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+}
+
+.mobile-drawer .lang-dropdown-menu {
+  position: static;
+  width: 100%;
+  max-height: 250px;
+  margin-top: 8px;
+  box-shadow: none;
+  border: 1px solid var(--border-subtle);
+}
+
 .mobile-nav-item {
   display: flex;
   align-items: center;
@@ -3279,13 +3353,17 @@ h6 {
     justify-content: center;
   }
   .demo-buttons-row {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 6px;
   }
   .demo-pill-btn {
-    flex: 1 1 calc(50% - 6px);
+    width: 100%;
+    padding: 8px 6px;
+    font-size: 0.8rem;
     text-align: center;
     justify-content: center;
+    white-space: nowrap;
   }
   .venue-place-photos-banner {
     height: 140px;

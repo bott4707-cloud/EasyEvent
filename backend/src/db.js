@@ -333,45 +333,64 @@ export async function createUser(userData) {
 }
 
 export async function createSession(tokenHash, userId, expiresAt) {
-  if (isSupabaseConfigured) {
-    await supabase.from("sessions").insert({
-      token_hash: tokenHash,
-      user_id: userId,
-      expires_at: expiresAt,
-    });
-    return;
-  }
   memoryStore.sessions.push({
     token_hash: tokenHash,
     user_id: userId,
     expires_at: expiresAt,
   });
+
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("sessions").insert({
+        token_hash: tokenHash,
+        user_id: userId,
+        expires_at: expiresAt,
+      });
+    } catch {
+      // Supabase table not created yet or fallback
+    }
+  }
 }
 
 export async function getUserBySession(tokenHash) {
   const now = Math.floor(Date.now() / 1000);
-  if (isSupabaseConfigured) {
-    const { data, error } = await supabase
-      .from("sessions")
-      .select("user_id, expires_at, users(*)")
-      .eq("token_hash", tokenHash)
-      .gt("expires_at", now)
-      .maybeSingle();
-    if (!error && data?.users) return data.users;
-  }
+  
+  // 1. Check in-memory active sessions first
   const sess = memoryStore.sessions.find(
     (s) => s.token_hash === tokenHash && s.expires_at > now
   );
-  if (!sess) return null;
-  return memoryStore.users.find((u) => u.id === sess.user_id) || null;
+  if (sess) {
+    const memUser = memoryStore.users.find((u) => u.id === sess.user_id);
+    if (memUser) return memUser;
+  }
+
+  // 2. Check Supabase
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from("sessions")
+        .select("user_id, expires_at, users(*)")
+        .eq("token_hash", tokenHash)
+        .gt("expires_at", now)
+        .maybeSingle();
+      if (!error && data?.users) return data.users;
+    } catch {
+      // Supabase table not created yet or fallback
+    }
+  }
+
+  return null;
 }
 
 export async function deleteSession(tokenHash) {
-  if (isSupabaseConfigured) {
-    await supabase.from("sessions").delete().eq("token_hash", tokenHash);
-    return;
-  }
   memoryStore.sessions = memoryStore.sessions.filter((s) => s.token_hash !== tokenHash);
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("sessions").delete().eq("token_hash", tokenHash);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 export async function getDashboardState(user) {
@@ -524,24 +543,32 @@ export async function createStaffingRequest(reqData, organizerId) {
 }
 
 export async function cancelStaffingRequest(requestId, organizerId) {
-  if (isSupabaseConfigured) {
-    await supabase
-      .from("staffing_requests")
-      .update({ status: "Cancelled" })
-      .eq("id", requestId);
-    return;
-  }
   const req = memoryStore.requests.find((r) => r.id === requestId);
   if (req) req.status = "Cancelled";
+
+  if (isSupabaseConfigured) {
+    try {
+      await supabase
+        .from("staffing_requests")
+        .update({ status: "Cancelled" })
+        .eq("id", requestId);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 export async function updateShiftStatus(shiftId, status) {
-  if (isSupabaseConfigured) {
-    await supabase.from("shifts").update({ status }).eq("id", shiftId);
-    return;
-  }
   const shift = memoryStore.shifts.find((s) => s.id === shiftId);
   if (shift) shift.status = status;
+
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("shifts").update({ status }).eq("id", shiftId);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 export async function updateWorkerAvailability(userId, { available, availableDates }) {
@@ -549,70 +576,93 @@ export async function updateWorkerAvailability(userId, { available, availableDat
   if (available !== undefined) updates.available = available;
   if (availableDates !== undefined) updates.available_dates = availableDates;
 
-  if (isSupabaseConfigured) {
-    await supabase.from("users").update(updates).eq("id", userId);
-    return;
-  }
   const u = memoryStore.users.find((user) => user.id === userId);
   if (u) {
     if (available !== undefined) u.available = available;
     if (availableDates !== undefined) u.available_dates = availableDates;
   }
+
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("users").update(updates).eq("id", userId);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 // Admin Methods
 export async function updateAdminEvent(id, changes) {
-  if (isSupabaseConfigured) {
-    const { data } = await supabase
-      .from("events")
-      .update(changes)
-      .eq("id", id)
-      .select()
-      .single();
-    return data;
-  }
   const event = memoryStore.events.find((e) => e.id === id);
   if (event) Object.assign(event, changes);
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data } = await supabase
+        .from("events")
+        .update(changes)
+        .eq("id", id)
+        .select()
+        .single();
+      if (data) return data;
+    } catch {
+      // Supabase fallback
+    }
+  }
   return event;
 }
 
 export async function deleteAdminEvent(id) {
-  if (isSupabaseConfigured) {
-    await supabase.from("events").delete().eq("id", id);
-    return;
-  }
   memoryStore.events = memoryStore.events.filter((e) => e.id !== id);
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("events").delete().eq("id", id);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 export async function updateAdminRequest(id, status) {
-  if (isSupabaseConfigured) {
-    const { data } = await supabase
-      .from("staffing_requests")
-      .update({ status })
-      .eq("id", id)
-      .select()
-      .single();
-    return data;
-  }
   const req = memoryStore.requests.find((r) => r.id === id);
   if (req) req.status = status;
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data } = await supabase
+        .from("staffing_requests")
+        .update({ status })
+        .eq("id", id)
+        .select()
+        .single();
+      if (data) return data;
+    } catch {
+      // Supabase fallback
+    }
+  }
   return req;
 }
 
 export async function deleteAdminRequest(id) {
-  if (isSupabaseConfigured) {
-    await supabase.from("staffing_requests").delete().eq("id", id);
-    return;
-  }
   memoryStore.requests = memoryStore.requests.filter((r) => r.id !== id);
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("staffing_requests").delete().eq("id", id);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 export async function deleteAdminUser(id) {
-  if (isSupabaseConfigured) {
-    await supabase.from("users").delete().eq("id", id);
-    return;
-  }
   memoryStore.users = memoryStore.users.filter((u) => u.id !== id);
+  if (isSupabaseConfigured) {
+    try {
+      await supabase.from("users").delete().eq("id", id);
+    } catch {
+      // Supabase fallback
+    }
+  }
 }
 
 export async function applyForEvent(workerId, eventId, duty) {

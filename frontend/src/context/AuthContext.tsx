@@ -17,7 +17,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<Account>;
   signup: (input: SignupInput) => Promise<Account>;
   logout: () => Promise<void>;
-  demoLogin: (role: Role) => void;
+  demoLogin: (role: Role) => Promise<Account>;
   refreshState: () => Promise<void>;
   updateShift: (shiftId: string, status: ShiftStatus) => Promise<void>;
   updateAvailability: (change: { available?: boolean; availableDates?: string[] }) => Promise<void>;
@@ -202,17 +202,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUser(null);
   }, [isBackendConnected]);
 
-  const demoLogin = useCallback((role: Role) => {
-    const demoUser =
-      appData.users.find((u) => u.role === role) || {
-        id: `demo-${role}`,
-        name: role === "worker" ? "Rohan Verma" : role === "organizer" ? "Ananya Rao" : "Administrator",
-        email: `${role}@easyevent.in`,
-        role,
-      };
-    setCurrentUser(demoUser);
-    try { localStorage.setItem("easyevent_has_account", "true"); } catch {}
-  }, [appData.users]);
+  const demoLogin = useCallback(
+    async (role: Role): Promise<Account> => {
+      const email = `${role}@easyevent.in`;
+      const password =
+        role === "worker"
+          ? "WorkerPassword2026!"
+          : role === "organizer"
+          ? "OrganizerPassword2026!"
+          : "AdminPassword2026!";
+
+      try {
+        localStorage.setItem("easyevent_has_account", "true");
+      } catch {}
+
+      if (isBackendConnected) {
+        try {
+          const session = await api.login(email, password);
+          setCurrentUser(session.user);
+          setAppData(session.data);
+          const evts = await api.loadEvents().catch(() => session.data.events);
+          setPublicEvents(evts);
+          return session.user;
+        } catch (err) {
+          console.warn("Backend demo login failed, falling back to local state", err);
+        }
+      }
+
+      // Offline / immediate fallback
+      const demoUser =
+        appData.users.find((u) => u.role === role) || {
+          id: `demo-${role}`,
+          name: role === "worker" ? "Rohan Verma" : role === "organizer" ? "Ananya Rao" : "Administrator",
+          email,
+          role,
+        };
+      setCurrentUser(demoUser);
+      return demoUser;
+    },
+    [isBackendConnected, appData.users]
+  );
 
   const updateShift = useCallback(
     async (shiftId: string, status: ShiftStatus) => {
