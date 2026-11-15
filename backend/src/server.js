@@ -26,6 +26,8 @@ import {
   updateShiftStatus,
   updateWorkerAvailability,
   applyForEvent,
+  cancelWorkerShift,
+  verifyAttendance,
   updateAdminEvent,
   deleteAdminEvent,
   updateAdminRequest,
@@ -305,7 +307,33 @@ app.post("/api/worker/apply", authenticateUser, requireRole("worker"), async (re
     res.status(201).json(shift);
   } catch (err) {
     console.error("Worker apply error", err);
-    res.status(500).json({ detail: err.message || "Could not apply for shift." });
+    res.status(400).json({ detail: err.message || "Could not apply for shift." });
+  }
+});
+
+app.post("/api/worker/cancel-shift", authenticateUser, requireRole("worker"), async (req, res) => {
+  try {
+    const { shiftId } = req.body;
+    if (!shiftId) return res.status(422).json({ detail: "Shift ID is required." });
+    const result = await cancelWorkerShift(req.user.id, shiftId);
+    res.json(result);
+  } catch (err) {
+    console.error("Worker shift cancellation error", err);
+    res.status(400).json({ detail: err.message || "Shift could not be cancelled." });
+  }
+});
+
+app.post("/api/organizer/attendance", authenticateUser, requireRole("organizer", "admin"), async (req, res) => {
+  try {
+    const { shiftId, attended } = req.body;
+    if (!shiftId || typeof attended !== "boolean") {
+      return res.status(422).json({ detail: "Shift ID and attended status (true/false) are required." });
+    }
+    const result = await verifyAttendance(shiftId, attended);
+    res.json(result);
+  } catch (err) {
+    console.error("Organizer attendance verification error", err);
+    res.status(500).json({ detail: err.message || "Attendance could not be recorded." });
   }
 });
 

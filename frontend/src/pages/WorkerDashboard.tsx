@@ -18,6 +18,9 @@ import {
   Lock,
   Camera,
   Megaphone,
+  Users,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -29,12 +32,14 @@ import {
   formatTime,
   getDutyHourlyRate,
   parseShiftHours,
+  getShiftCancellationEligibility,
 } from "../data/mockData";
 import type { Shift, ShiftStatus } from "../types";
 import { Button } from "../components/common/Button";
 import { Card } from "../components/common/Card";
 import { Badge } from "../components/common/Badge";
 import { StatCard } from "../components/common/StatCard";
+import { Modal } from "../components/common/Modal";
 
 type ShiftFilter = "all" | "upcoming" | "completed";
 
@@ -60,13 +65,27 @@ function parseSupervisor(rawSupervisor?: string) {
 }
 
 export function WorkerDashboard({ navigate }: { navigate: (route: string) => void }) {
-  const { currentUser, appData, publicEvents, updateShift, updateAvailability, applyForShift } = useAuth();
+  const {
+    currentUser,
+    appData,
+    publicEvents,
+    updateShift,
+    updateAvailability,
+    applyForShift,
+    cancelWorkerShift,
+  } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
 
   const [filter, setFilter] = useState<ShiftFilter>("all");
   const [mapShiftId, setMapShiftId] = useState<string | null>(null);
   const [applyingEventId, setApplyingEventId] = useState<string | null>(null);
+  const [cancellingShift, setCancellingShift] = useState<Shift | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const isSuspended = Boolean(
+    currentUser?.suspendedUntil && new Date(currentUser.suspendedUntil) > new Date()
+  );
 
   const today = new Date();
   const todayKey = dateKey(today);
@@ -204,14 +223,40 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
   };
 
   const handleApply = async (eventId: string, duty: string) => {
+    if (isSuspended) {
+      showToast(
+        "Account Suspended: You cannot accept new shifts due to repeat unattended shift violations.",
+        "error"
+      );
+      return;
+    }
     setApplyingEventId(eventId);
     try {
       await applyForShift(eventId, duty);
-      showToast("Shift accepted! Check your assigned schedule below.");
-    } catch {
-      showToast("Could not apply for shift.", "error");
+      showToast(
+        "Shift Confirmed! 🎉 Your slot is booked. Note: You can cancel free up to 4 hours before reporting time.",
+        "success"
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not apply for shift.";
+      showToast(msg, "error");
     } finally {
       setApplyingEventId(null);
+    }
+  };
+
+  const handleConfirmCancelShift = async () => {
+    if (!cancellingShift) return;
+    setIsCancelling(true);
+    try {
+      await cancelWorkerShift(cancellingShift.id);
+      showToast("Shift cancelled successfully. Your position has been released for another crew member.");
+      setCancellingShift(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not cancel shift.";
+      showToast(msg, "error");
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -249,6 +294,42 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
           <LanguageSelector variant="header" />
         </div>
       </div>
+
+      {/* Disciplinary Notice / Suspension Alert Banner */}
+      {isSuspended ? (
+        <div className="disciplinary-banner suspension-alert-banner">
+          <div className="alert-icon-box">
+            <AlertTriangle size={24} />
+          </div>
+          <div className="alert-content-box">
+            <h4>Account Suspended for 2 Days</h4>
+            <p>
+              Your account has been temporarily suspended until{" "}
+              <strong>
+                {currentUser?.suspendedUntil
+                  ? new Date(currentUser.suspendedUntil).toLocaleString("en-IN")
+                  : "in 2 days"}
+              </strong>{" "}
+              due to 2 unattended shift violations. During this period, you cannot accept new event shifts.
+            </p>
+          </div>
+        </div>
+      ) : currentUser?.warnings && currentUser.warnings > 0 ? (
+        <div className="disciplinary-banner warning-alert-banner">
+          <div className="alert-icon-box">
+            <AlertCircle size={24} />
+          </div>
+          <div className="alert-content-box">
+            <h4>Disciplinary Notice: Warning #{currentUser.warnings} Issued</h4>
+            <p>
+              {currentUser.warningReason ||
+                "An organizer marked you as 'Did Not Attend' for a booked shift. Your payout for that shift is delayed under review."}
+              <br />
+              <strong>Notice:</strong> A second unattended shift violation will trigger an automatic 2-day account suspension.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* KPI Stats Grid */}
       <div className="stat-cards-grid">
@@ -473,6 +554,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
             const hours = parseShiftHours(shift.reporting, shift.endTime || shift.end_time || "05:00 PM");
             const rate = getDutyHourlyRate(shift.duty);
             const payout = Math.round(hours * rate);
+            const cancellationInfo = getShiftCancellationEligibility(shift.date, shift.reporting);
 
             // Match place photos (1 or 2)
             const matchedEvent = publicEvents.find((e) => e.id === shift.event_id || e.title === shift.title);
@@ -527,6 +609,14 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                         <span className="shift-card-payout-badge in-progress">
                           <Clock size={13} /> ₹{payout.toLocaleString("en-IN")} In Progress
                         </span>
+                      ) : shift.status === "Did Not Attend" ? (
+                        <span className="shift-card-payout-badge penalty">
+                          <AlertTriangle size={13} /> Payout Delayed (Under Review)
+                        </span>
+                      ) : shift.status === "Cancelled" ? (
+                        <span className="shift-card-payout-badge cancelled">
+                          <XCircle size={13} /> Shift Cancelled
+                        </span>
                       ) : (
                         <span className="shift-card-payout-badge estimated">
                           <IndianRupee size={12} /> Expected: ₹{payout.toLocaleString("en-IN")} ({hours}h)
@@ -546,6 +636,69 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                     </div>
                   </div>
                   <Badge status={shift.status} />
+                </div>
+
+                {/* Real-time Visual Progress Stepper */}
+                <div className="shift-realtime-stepper">
+                  <div className="stepper-header-meta">
+                    <span className="stepper-title-text">
+                      <span className="pulse-indicator-dot" /> Live Shift Progression
+                    </span>
+                    <span className="stepper-time-status">
+                      {shift.status === "Completed" && "Attended & Credited"}
+                      {shift.status === "Reporting" && "On-Site Check-In Active"}
+                      {shift.status === "Accepted" && "Ready for Dispatch"}
+                      {shift.status === "Assigned" && "Slot Booked"}
+                      {shift.status === "Cancelled" && "Booking Released"}
+                      {shift.status === "Did Not Attend" && "Marked No-Show"}
+                    </span>
+                  </div>
+
+                  {shift.status === "Cancelled" ? (
+                    <div className="stepper-alert-bar cancelled">
+                      <XCircle size={15} />
+                      <span>This shift booking was cancelled. The slot has been returned to the event crew pool.</span>
+                    </div>
+                  ) : shift.status === "Did Not Attend" ? (
+                    <div className="stepper-alert-bar noshow">
+                      <AlertTriangle size={15} />
+                      <span>Organizer marked as 'Did Not Attend'. Shift payout delayed under disciplinary review.</span>
+                    </div>
+                  ) : (
+                    <div className="stepper-steps-track">
+                      {[
+                        { key: "Assigned", label: "Assigned", desc: "Booked" },
+                        { key: "Accepted", label: "Accepted", desc: "Confirmed" },
+                        { key: "Reporting", label: "Reporting", desc: "On Site" },
+                        { key: "Completed", label: "Completed", desc: "Verified" },
+                      ].map((step, idx) => {
+                        const stepOrder: Record<string, number> = {
+                          Assigned: 0,
+                          Accepted: 1,
+                          Reporting: 2,
+                          Completed: 3,
+                        };
+                        const curIdx = stepOrder[shift.status] ?? 0;
+                        const isDone = curIdx > idx;
+                        const isCurrent = curIdx === idx;
+
+                        return (
+                          <div
+                            key={step.key}
+                            className={`stepper-node ${isDone ? "done" : isCurrent ? "current" : "upcoming"}`}
+                          >
+                            <div className="stepper-node-marker">
+                              {isDone ? <CheckCircle2 size={13} /> : <span>{idx + 1}</span>}
+                            </div>
+                            <div className="stepper-node-text">
+                              <span className="node-label">{step.label}</span>
+                              <span className="node-desc">{step.desc}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="shift-details-grid">
@@ -600,6 +753,26 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                     </Button>
                   )}
 
+                  {/* 4-Hour Cancellation Policy Button */}
+                  {shift.status !== "Completed" && shift.status !== "Cancelled" && shift.status !== "Did Not Attend" && (
+                    cancellationInfo.canCancel ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="btn-cancel-shift"
+                        icon={<XCircle size={14} />}
+                        onClick={() => setCancellingShift(shift)}
+                        title={`Free cancellation available (${cancellationInfo.hoursRemaining.toFixed(1)}h remaining)`}
+                      >
+                        Cancel Shift
+                      </Button>
+                    ) : (
+                      <span className="cancellation-locked-pill" title="Cancellations are locked within 4 hours of reporting time.">
+                        <Lock size={12} /> Cancellation Locked (&lt; 4h)
+                      </span>
+                    )
+                  )}
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -621,6 +794,13 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                     <ExternalLink size={12} />
                   </a>
                 </div>
+
+                {/* Cancellation notice chip */}
+                {shift.status !== "Completed" && shift.status !== "Cancelled" && shift.status !== "Did Not Attend" && cancellationInfo.canCancel && (
+                  <div className="shift-cancellation-notice-line">
+                    ⏱️ Free cancellation available until 4 hours before reporting ({cancellationInfo.hoursRemaining.toFixed(1)} hours left)
+                  </div>
+                )}
 
                 {isMapOpen && (
                   <div className="shift-map-container animate-fade-in">
@@ -676,7 +856,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
         </div>
 
         <div className="events-cards-grid">
-          {openEvents.slice(0, 3).map((evt) => {
+          {openEvents.slice(0, 6).map((evt) => {
             const isApp = applyingEventId === evt.id;
             const rate = getDutyHourlyRate(evt.duty);
             const hours = parseShiftHours(evt.time || "09:00 AM", "05:00 PM");
@@ -684,6 +864,11 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
             const images = evt.images && evt.images.length > 0 ? evt.images : [
               "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=800&auto=format&fit=crop&q=80"
             ];
+            const required = evt.required || 1;
+            const assigned = evt.assigned || 0;
+            const remaining = Math.max(0, required - assigned);
+            const isFull = assigned >= required;
+            const fillPct = Math.min(100, Math.round((assigned / required) * 100));
 
             return (
               <div key={evt.id} className="event-opportunity-card">
@@ -692,6 +877,11 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                   {images.length > 1 && (
                     <span className="photo-counter-tag">
                       <Camera size={11} style={{ marginRight: 3, verticalAlign: "middle" }} /> 2 Photos
+                    </span>
+                  )}
+                  {isFull && (
+                    <span className="event-full-media-badge">
+                      FULL · {assigned}/{required} Taken
                     </span>
                   )}
                 </div>
@@ -718,16 +908,42 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
                     </span>
                   </div>
 
+                  {/* Real-time Staffing Numbers & Fill Meter */}
+                  <div className="event-staffing-meter-box">
+                    <div className="staffing-meter-header">
+                      <span className="staffing-count-label">
+                        <Users size={13} />
+                        {isFull ? (
+                          <strong className="text-danger">FULL: {assigned} / {required} Members Taken</strong>
+                        ) : (
+                          <span><strong>Needs {remaining} Members</strong> ({assigned} / {required} Taken)</span>
+                        )}
+                      </span>
+                      <span className="staffing-percentage">{fillPct}%</span>
+                    </div>
+                    <div className="staffing-meter-bar">
+                      <div
+                        className={`staffing-fill-progress ${isFull ? "full" : ""}`}
+                        style={{ width: `${fillPct}%` }}
+                      />
+                    </div>
+                  </div>
+
                   <div className="event-card-footer-btns">
                     <Button
-                      variant="primary"
+                      variant={isFull ? "outline" : "primary"}
                       size="sm"
                       className="w-full"
+                      disabled={isFull || isSuspended}
                       loading={isApp}
                       icon={<ArrowRight size={14} />}
                       onClick={() => handleApply(evt.id, evt.duty)}
                     >
-                      {t("btn_apply")}
+                      {isSuspended
+                        ? "Account Suspended"
+                        : isFull
+                        ? `Members Full (${assigned}/${required} Taken)`
+                        : t("btn_apply")}
                     </Button>
                   </div>
                 </div>
@@ -736,6 +952,51 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
           })}
         </div>
       </section>
+
+      {/* Confirmation Modal for Shift Cancellation */}
+      <Modal
+        isOpen={Boolean(cancellingShift)}
+        onClose={() => setCancellingShift(null)}
+        title="Confirm Shift Cancellation"
+      >
+        {cancellingShift && (
+          <div className="cancellation-modal-content">
+            <div className="cancellation-warning-callout">
+              <AlertTriangle size={24} className="warning-callout-icon" />
+              <div>
+                <h4 style={{ margin: "0 0 6px 0", fontSize: "0.98rem", fontWeight: 700 }}>
+                  Release shift for {cancellingShift.title}?
+                </h4>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-secondary)" }}>
+                  Date: <strong>{formatDate(cancellingShift.date)}</strong> · Reporting: <strong>{cancellingShift.reporting}</strong>
+                </p>
+              </div>
+            </div>
+
+            <p style={{ fontSize: "0.86rem", color: "var(--ink-secondary)", lineHeight: 1.5, margin: "14px 0" }}>
+              ✓ You are cancelling more than 4 hours before reporting time. Your booking will be cancelled with no disciplinary strikes, and your position will be immediately made available to other crew members in real-time.
+            </p>
+
+            <div className="button-row justify-end" style={{ gap: 10, marginTop: 18 }}>
+              <Button
+                variant="outline"
+                disabled={isCancelling}
+                onClick={() => setCancellingShift(null)}
+              >
+                Keep My Shift
+              </Button>
+              <Button
+                variant="danger"
+                loading={isCancelling}
+                icon={<XCircle size={15} />}
+                onClick={handleConfirmCancelShift}
+              >
+                Confirm Cancellation
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

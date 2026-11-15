@@ -22,6 +22,8 @@ interface AuthContextValue {
   updateShift: (shiftId: string, status: ShiftStatus) => Promise<void>;
   updateAvailability: (change: { available?: boolean; availableDates?: string[] }) => Promise<void>;
   applyForShift: (eventId: string, duty?: string) => Promise<void>;
+  cancelWorkerShift: (shiftId: string) => Promise<boolean>;
+  verifyAttendance: (shiftId: string, attended: boolean) => Promise<void>;
   createEvent: (input: EventInput) => Promise<boolean>;
   createRequest: (input: { eventId: string; quantity: number; duty: string }) => Promise<boolean>;
   cancelRequest: (requestId: string) => Promise<void>;
@@ -320,6 +322,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [isBackendConnected, publicEvents, refreshState]
   );
 
+  const cancelWorkerShift = useCallback(
+    async (shiftId: string): Promise<boolean> => {
+      let targetEventId: string | undefined;
+      setAppData((prev) => {
+        const targetShift = prev.shifts.find((s) => s.id === shiftId);
+        targetEventId = targetShift?.event_id || undefined;
+        return {
+          ...prev,
+          shifts: prev.shifts.map((s) =>
+            s.id === shiftId ? { ...s, status: "Cancelled" as ShiftStatus } : s
+          ),
+          events: prev.events.map((e) =>
+            e.id === targetEventId ? { ...e, assigned: Math.max(0, (e.assigned || 1) - 1) } : e
+          ),
+        };
+      });
+
+      if (targetEventId) {
+        setPublicEvents((prev) =>
+          prev.map((e) =>
+            e.id === targetEventId ? { ...e, assigned: Math.max(0, (e.assigned || 1) - 1) } : e
+          )
+        );
+      }
+
+      if (isBackendConnected) {
+        try {
+          await api.cancelWorkerShift(shiftId);
+        } catch (err) {
+          console.warn("Backend shift cancel failed", err);
+          throw err;
+        }
+      }
+      return true;
+    },
+    [isBackendConnected]
+  );
+
+  const verifyAttendance = useCallback(
+    async (shiftId: string, attended: boolean): Promise<void> => {
+      setAppData((prev) => {
+        const nextStatus: ShiftStatus = attended ? "Completed" : "Did Not Attend";
+        const targetShift = prev.shifts.find((s) => s.id === shiftId);
+        const workerId = targetShift?.worker_id;
+
+        return {
+          ...prev,
+          shifts: prev.shifts.map((s) =>
+            s.id === shiftId
+              ? {
+                  ...s,
+                  status: nextStatus,
+                  attended,
+                  paymentDelayed: !attended,
+                  payment_delayed: !attended,
+                  payoutStatus: attended ? "Credited" : "Delayed / Under Review",
+                  payout_status: attended ? "Credited" : "Delayed / Under Review",
+                }
+              : s
+          ),
+          users: prev.users.map((u) => {
+            if (u.id === workerId && !attended) {
+              const warnings = (u.warnings || 0) + 1;
+              const suspendedUntil =
+                warnings >= 2 ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() : null;
+              return {
+                ...u,
+                warnings,
+                warningReason:
+                  warnings >= 2
+                    ? "Suspended for 2 days due to 2 unattended shifts."
+                    : `Warning #1: Shift unattended (${targetShift?.title || "Event"}). Payment delayed.`,
+                suspendedUntil,
+              };
+            }
+            return u;
+          }),
+        };
+      });
+
+      if (isBackendConnected) {
+        try {
+          await api.verifyAttendance(shiftId, attended);
+        } catch (err) {
+          console.warn("Backend attendance verification failed", err);
+        }
+      }
+    },
+    [isBackendConnected]
+  );
+
   const createEvent = useCallback(
     async (input: EventInput): Promise<boolean> => {
       if (isBackendConnected) {
@@ -484,6 +577,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateShift,
         updateAvailability,
         applyForShift,
+        cancelWorkerShift,
+        verifyAttendance,
         createEvent,
         createRequest,
         cancelRequest,

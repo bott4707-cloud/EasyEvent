@@ -1,6 +1,12 @@
 export type Role = "worker" | "organizer" | "admin";
 
-export type ShiftStatus = "Assigned" | "Accepted" | "Reporting" | "Completed" | "Cancelled";
+export type ShiftStatus =
+  | "Assigned"
+  | "Accepted"
+  | "Reporting"
+  | "Completed"
+  | "Cancelled"
+  | "Did Not Attend";
 export type EventStatus = "Pending approval" | "Published" | "Rejected";
 export type RequestStatus = "Pending" | "Approved" | "Rejected" | "Cancelled";
 
@@ -11,6 +17,11 @@ export interface Account {
   role: Role;
   available?: boolean;
   availableDates?: string[];
+  warnings?: number;
+  warningReason?: string | null;
+  warning_reason?: string | null;
+  suspendedUntil?: string | null;
+  suspended_until?: string | null;
 }
 
 export interface Event {
@@ -55,6 +66,12 @@ export interface Shift {
   status: ShiftStatus;
   images?: string[];
   crew_briefing?: string;
+  attended?: boolean | null;
+  paymentDelayed?: boolean;
+  payment_delayed?: boolean;
+  payoutStatus?: string;
+  payout_status?: string;
+  cancelled_at?: string;
 }
 
 export interface AppData {

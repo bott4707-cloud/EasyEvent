@@ -295,6 +295,48 @@ export function dateKey(value: Date): string {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
+export function getShiftCancellationEligibility(shiftDate: string, reportingTime: string): {
+  canCancel: boolean;
+  hoursRemaining: number;
+  message: string;
+} {
+  let hours = 9;
+  let minutes = 0;
+  if (reportingTime && reportingTime.includes(":")) {
+    const raw = reportingTime.replace(/[^0-9:]/g, "").split(":");
+    hours = parseInt(raw[0], 10) || 9;
+    minutes = parseInt(raw[1], 10) || 0;
+    const isPM = reportingTime.toLowerCase().includes("pm");
+    const isAM = reportingTime.toLowerCase().includes("am");
+    if (isPM && hours < 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+  }
+
+  const shiftDateTime = new Date(`${shiftDate}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`);
+  const now = new Date();
+  const diffHours = (shiftDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+  if (diffHours > 4) {
+    return {
+      canCancel: true,
+      hoursRemaining: diffHours,
+      message: `Free cancellation allowed (${diffHours.toFixed(1)}h remaining). You can cancel up to 4 hours before.`,
+    };
+  } else if (diffHours > 0) {
+    return {
+      canCancel: false,
+      hoursRemaining: diffHours,
+      message: `Cancellation locked (${diffHours.toFixed(1)}h remaining). Shifts cannot be cancelled within 4 hours of reporting time.`,
+    };
+  } else {
+    return {
+      canCancel: false,
+      hoursRemaining: 0,
+      message: `Event is on-site or completed. Cancellation is closed.`,
+    };
+  }
+}
+
 export function formatTime(value: string): string {
   if (!value) return "";
   if (value.includes("AM") || value.includes("PM")) return value;

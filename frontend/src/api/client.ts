@@ -1,4 +1,4 @@
-import type { Account, AppData, Event, EventStatus, RequestStatus, Role, ShiftStatus, StaffingRequest } from "../types";
+import type { Account, AppData, Event, EventStatus, RequestStatus, Role, Shift, ShiftStatus, StaffingRequest } from "../types";
 
 export interface AppState {
   user: Account;
@@ -120,6 +120,16 @@ export const api = {
     request<void>("/api/worker/apply", {
       method: "POST",
       body: JSON.stringify({ eventId, duty }),
+    }),
+  cancelWorkerShift: (shiftId: string) =>
+    request<{ success: boolean; eventId: string }>(`/api/worker/cancel-shift`, {
+      method: "POST",
+      body: JSON.stringify({ shiftId }),
+    }),
+  verifyAttendance: (shiftId: string, attended: boolean) =>
+    request<{ shift: Shift; worker?: Account }>(`/api/organizer/attendance`, {
+      method: "POST",
+      body: JSON.stringify({ shiftId, attended }),
     }),
   updateEvent: (id: string, changes: Partial<Event> & { status?: EventStatus }) =>
     request<Event>(`/api/admin/events/${encodeURIComponent(id)}`, {

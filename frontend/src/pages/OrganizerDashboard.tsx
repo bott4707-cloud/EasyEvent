@@ -59,12 +59,21 @@ const VENUE_PRESETS = [
 ];
 
 export function OrganizerDashboard({ navigate }: { navigate: (route: string) => void }) {
-  const { currentUser, appData, createEvent, createRequest, cancelRequest, updateAdminEvent } = useAuth();
+  const {
+    currentUser,
+    appData,
+    createEvent,
+    createRequest,
+    cancelRequest,
+    updateAdminEvent,
+    verifyAttendance,
+  } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [verifyingShiftId, setVerifyingShiftId] = useState<string | null>(null);
 
   // Form states for creating event
   const [eventTitle, setEventTitle] = useState("");
@@ -313,6 +322,22 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
     }
   };
 
+  const handleAttendanceCheck = async (shiftId: string, attended: boolean) => {
+    setVerifyingShiftId(shiftId);
+    try {
+      await verifyAttendance(shiftId, attended);
+      if (attended) {
+        showToast("Crew attendance verified! Shift marked completed and payout credited.", "success");
+      } else {
+        showToast("Crew member marked as Did Not Attend. Payout delayed under review and strike recorded.", "error");
+      }
+    } catch {
+      showToast("Could not record attendance verification.", "error");
+    } finally {
+      setVerifyingShiftId(null);
+    }
+  };
+
   const visibleEvents = myEvents.filter((event) => {
     if (eventFilter === "active") return event.status === "Published";
     if (eventFilter === "shortage") return event.assigned < event.required;
@@ -481,21 +506,22 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
 
                 <div className="shift-details-grid">
                   <div className="shift-detail-item">
-                    <span className="detail-label">Staffing Status</span>
+                    <span className="detail-label">Real-Time Staffing Status</span>
                     <span className="detail-value">
-                      {event.assigned} / {event.required} Crew Confirmed
-                    </span>
-                    <span className="detail-sub">
-                      {shortage > 0 ? (
-                        <span style={{ color: "var(--amber)", fontWeight: 700 }}>
-                          ⚠️ {shortage} Crew Members Needed
+                      {shortage === 0 ? (
+                        <span style={{ color: "var(--emerald)", fontWeight: 700 }}>
+                          FULL: {event.assigned} / {event.required} Crew Taken
                         </span>
                       ) : (
-                        <span style={{ color: "var(--emerald)", fontWeight: 700 }}>
-                          ✓ Full Crew Deployed
-                        </span>
+                        <span>Needs {shortage} Members ({event.assigned} / {event.required} Taken)</span>
                       )}
                     </span>
+                    <div className="staffing-meter-bar" style={{ marginTop: 8 }}>
+                      <div
+                        className={`staffing-fill-progress ${shortage === 0 ? "full" : ""}`}
+                        style={{ width: `${Math.min(100, Math.round((event.assigned / (event.required || 1)) * 100))}%` }}
+                      />
+                    </div>
                   </div>
 
                   <div className="shift-detail-item">
@@ -707,34 +733,91 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
         </div>
 
         <div className="shifts-list-stack">
-          {assignedCrewShifts.map((shift) => (
-            <Card key={shift.id} variant="default" className="shift-item-card">
-              <div className="shift-card-top">
-                <div>
-                  <span className="shift-duty-pill">{shift.duty}</span>
-                  <h4 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "6px 0" }}>{shift.title}</h4>
-                  <div className="shift-date-time-row">
-                    <span>
-                      <Calendar size={13} /> {formatDate(shift.date)}
-                    </span>
-                    <span>
-                      <Clock size={13} /> {shift.reporting} - {shift.endTime}
-                    </span>
-                    <span>
-                      <MapPin size={13} /> {shift.venue}
-                    </span>
+          {assignedCrewShifts.map((shift) => {
+            const isVerifying = verifyingShiftId === shift.id;
+            const isAttended = shift.status === "Completed" && shift.attended !== false;
+            const isNoShow = shift.status === "Did Not Attend" || shift.attended === false;
+
+            return (
+              <Card key={shift.id} variant="default" className="shift-item-card">
+                <div className="shift-card-top">
+                  <div>
+                    <span className="shift-duty-pill">{shift.duty}</span>
+                    <h4 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "6px 0" }}>{shift.title}</h4>
+                    <div className="shift-date-time-row">
+                      <span>
+                        <Calendar size={13} /> {formatDate(shift.date)}
+                      </span>
+                      <span>
+                        <Clock size={13} /> {shift.reporting} - {shift.endTime}
+                      </span>
+                      <span>
+                        <MapPin size={13} /> {shift.venue}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--ink-secondary)" }}>
+                      <Phone size={13} />
+                      <span>Lead: {shift.supervisor}</span>
+                    </div>
+                    <Badge status={shift.status} />
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.82rem", color: "var(--ink-secondary)" }}>
-                    <Phone size={13} />
-                    <span>Lead: {shift.supervisor}</span>
+
+                {/* Organizer Attendance Verification & Payout Release Control */}
+                <div className="roster-attendance-panel">
+                  <div className="attendance-status-header">
+                    <span className="attendance-title-text">
+                      <UserCheck size={14} /> Organizer Attendance Check
+                    </span>
+                    {isAttended ? (
+                      <span className="attendance-chip attended">
+                        <CheckCircle2 size={13} /> Attended · Payout Credited
+                      </span>
+                    ) : isNoShow ? (
+                      <span className="attendance-chip noshow">
+                        <AlertTriangle size={13} /> Did Not Attend · Payout Delayed & Strike Applied
+                      </span>
+                    ) : (
+                      <span className="attendance-chip pending">
+                        <Clock size={13} /> Awaiting Attendance Verification
+                      </span>
+                    )}
                   </div>
-                  <Badge status={shift.status} />
+
+                  <div className="attendance-action-row">
+                    <span className="attendance-instruction">
+                      Confirm crew member attendance for this shift:
+                    </span>
+                    <div className="attendance-btn-pair">
+                      <button
+                        type="button"
+                        className={`attendance-check-btn attend ${isAttended ? "active" : ""}`}
+                        disabled={isVerifying || isAttended}
+                        onClick={() => handleAttendanceCheck(shift.id, true)}
+                        title="Tick to confirm worker attended on site"
+                      >
+                        <UserCheck size={14} />
+                        <span>{isAttended ? "✓ Attended" : "Mark Attended"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`attendance-check-btn noshow ${isNoShow ? "active" : ""}`}
+                        disabled={isVerifying || isNoShow}
+                        onClick={() => handleAttendanceCheck(shift.id, false)}
+                        title="Mark worker Did Not Attend (Delays payout, applies warning strike #1 or 2-day suspension #2)"
+                      >
+                        <UserX size={14} />
+                        <span>{isNoShow ? "✗ Did Not Attend" : "Mark Did Not Attend"}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
           {assignedCrewShifts.length === 0 && (
             <Card className="empty-requests-card" style={{ padding: 24, textAlign: "center" }}>
               <p className="muted-text">No crew shifts currently assigned to your events.</p>

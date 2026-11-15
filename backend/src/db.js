@@ -673,6 +673,11 @@ export async function getDashboardState(user) {
     ...s,
     endTime: s.endTime || s.end_time || "05:00 PM",
     end_time: s.end_time || s.endTime || "05:00 PM",
+    attended: s.attended !== undefined ? s.attended : s.status === "Completed" ? true : null,
+    paymentDelayed: Boolean(s.payment_delayed || s.paymentDelayed),
+    payment_delayed: Boolean(s.payment_delayed || s.paymentDelayed),
+    payoutStatus: s.payout_status || s.payoutStatus || (s.status === "Completed" ? "Credited" : s.status === "Did Not Attend" ? "Delayed / Under Review" : "Expected"),
+    payout_status: s.payout_status || s.payoutStatus || (s.status === "Completed" ? "Credited" : s.status === "Did Not Attend" ? "Delayed / Under Review" : "Expected"),
   }));
 
   return {
@@ -681,6 +686,9 @@ export async function getDashboardState(user) {
       name: user.name,
       email: user.email,
       role: user.role,
+      warnings: user.warnings || 0,
+      warningReason: user.warning_reason || null,
+      suspendedUntil: user.suspended_until || null,
     },
     data: {
       users,
@@ -875,6 +883,21 @@ export async function applyForEvent(workerId, eventId, duty) {
   const event = memoryStore.events.find((e) => e.id === eventId);
   if (!event) throw new Error("Event not found");
 
+  if (event.assigned >= event.required) {
+    throw new Error(`This event is full (${event.assigned}/${event.required} positions filled). No slots available.`);
+  }
+
+  const worker = memoryStore.users.find((u) => u.id === workerId);
+  if (worker?.suspended_until && new Date(worker.suspended_until) > new Date()) {
+    const untilStr = new Date(worker.suspended_until).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    throw new Error(`Your account is temporarily suspended until ${untilStr} due to repeated unattended shifts. You cannot accept new shifts at this time.`);
+  }
+
   const newShift = {
     id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     worker_id: workerId,
@@ -891,16 +914,127 @@ export async function applyForEvent(workerId, eventId, duty) {
     status: "Accepted",
     images: Array.isArray(event.images) ? event.images : [],
     crew_briefing: event.crew_briefing || "",
+    attended: null,
+    payment_delayed: false,
+    payout_status: "Expected",
     created_at: new Date().toISOString(),
   };
 
   event.assigned = (event.assigned || 0) + 1;
   memoryStore.shifts.unshift(newShift);
 
-  if (isSupabaseConfigured) {
-    await supabase.from("shifts").insert(newShift);
-    await supabase.from("events").update({ assigned: event.assigned }).eq("id", eventId);
+  if (isSupabaseConfigured && isTableAvailable("shifts")) {
+    supabase.from("shifts").insert(newShift).catch(() => {});
+    supabase.from("events").update({ assigned: event.assigned }).eq("id", eventId).catch(() => {});
   }
 
   return newShift;
+}
+
+export async function cancelWorkerShift(workerId, shiftId) {
+  const shift = memoryStore.shifts.find((s) => s.id === shiftId);
+  if (!shift) throw new Error("Shift not found");
+
+  if (shift.worker_id && shift.worker_id !== workerId) {
+    throw new Error("You are not authorized to cancel this shift.");
+  }
+
+  // 4-Hour Cancellation Policy Check
+  let hours = 9;
+  let minutes = 0;
+  if (shift.reporting && shift.reporting.includes(":")) {
+    const raw = shift.reporting.replace(/[^0-9:]/g, "").split(":");
+    hours = parseInt(raw[0], 10) || 9;
+    minutes = parseInt(raw[1], 10) || 0;
+    const isPM = shift.reporting.toLowerCase().includes("pm");
+    const isAM = shift.reporting.toLowerCase().includes("am");
+    if (isPM && hours < 12) hours += 12;
+    if (isAM && hours === 12) hours = 0;
+  }
+
+  const shiftDateTime = new Date(`${shift.date}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`);
+  const now = new Date();
+  const diffHours = (shiftDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+  if (diffHours > 0 && diffHours <= 4) {
+    throw new Error(
+      `Cancellation locked: Shift starts in ${diffHours.toFixed(1)} hours. The 4-hour cancellation window has expired. Mandatory attendance policy is active.`
+    );
+  }
+
+  shift.status = "Cancelled";
+  shift.cancelled_at = new Date().toISOString();
+
+  // Release the event staffing slot in real-time
+  if (shift.event_id) {
+    const event = memoryStore.events.find((e) => e.id === shift.event_id);
+    if (event) {
+      event.assigned = Math.max(0, (event.assigned || 1) - 1);
+      if (isSupabaseConfigured && isTableAvailable("events")) {
+        supabase.from("events").update({ assigned: event.assigned }).eq("id", event.id).catch(() => {});
+      }
+    }
+  }
+
+  if (isSupabaseConfigured && isTableAvailable("shifts")) {
+    supabase.from("shifts").update({ status: "Cancelled" }).eq("id", shiftId).catch(() => {});
+  }
+
+  return { success: true, shiftId, status: "Cancelled", eventId: shift.event_id };
+}
+
+export async function verifyAttendance(shiftId, attended) {
+  const shift = memoryStore.shifts.find((s) => s.id === shiftId);
+  if (!shift) throw new Error("Shift not found");
+
+  const worker = memoryStore.users.find((u) => u.id === shift.worker_id);
+
+  if (attended) {
+    shift.status = "Completed";
+    shift.attended = true;
+    shift.payment_delayed = false;
+    shift.payout_status = "Credited";
+  } else {
+    shift.status = "Did Not Attend";
+    shift.attended = false;
+    shift.payment_delayed = true;
+    shift.payout_status = "Delayed / Under Review";
+
+    if (worker) {
+      worker.warnings = (worker.warnings || 0) + 1;
+      if (worker.warnings === 1) {
+        worker.warning_reason = `1st Warning: Shift unattended for "${shift.title}". Payout delayed by 48 hours for review.`;
+      } else if (worker.warnings >= 2) {
+        const suspendUntil = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+        worker.suspended_until = suspendUntil;
+        worker.warning_reason = `2nd Strike: Account suspended for 2 days until ${new Date(suspendUntil).toLocaleDateString("en-IN")}. Policy: 2 unattended shifts.`;
+      }
+    }
+  }
+
+  if (isSupabaseConfigured && isTableAvailable("shifts")) {
+    supabase
+      .from("shifts")
+      .update({
+        status: shift.status,
+        attended: shift.attended,
+        payment_delayed: shift.payment_delayed,
+      })
+      .eq("id", shiftId)
+      .catch(() => {});
+  }
+
+  return {
+    shift,
+    worker: worker
+      ? {
+          id: worker.id,
+          name: worker.name,
+          email: worker.email,
+          warnings: worker.warnings,
+          warningReason: worker.warning_reason,
+          suspendedUntil: worker.suspended_until,
+        }
+      : null,
+  };
 }
