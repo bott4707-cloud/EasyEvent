@@ -19,6 +19,9 @@ export interface EventInput {
   time: string;
   duty: string;
   required: number;
+  images?: string[];
+  crew_briefing?: string;
+  description?: string;
 }
 
 export class ApiError extends Error {

@@ -2,10 +2,38 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Install backend dependencies",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\backend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run backend (Node.js & Supabase)",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "dev"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\backend"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "Install frontend dependencies",
       "type": "shell",
       "command": "npm",
-      "args": ["install"],
+      "args": [
+        "install"
+      ],
       "options": {
         "cwd": "${workspaceFolder}\\frontend"
       },
@@ -15,7 +43,10 @@
       "label": "Run frontend",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "dev"],
+      "args": [
+        "run",
+        "dev"
+      ],
       "options": {
         "cwd": "${workspaceFolder}\\frontend"
       },
@@ -26,7 +57,10 @@
       "label": "Build frontend",
       "type": "shell",
       "command": "npm",
-      "args": ["run", "build"],
+      "args": [
+        "run",
+        "build"
+      ],
       "options": {
         "cwd": "${workspaceFolder}\\frontend"
       },

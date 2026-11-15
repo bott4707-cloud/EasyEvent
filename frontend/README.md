@@ -1,55 +1,42 @@
-# EASYEVENT frontend
+# EASYEVENT Frontend (React & TypeScript)
 
-The frontend is a React and TypeScript single-page application built with Vite.
+The frontend is a single-page application built with React 19, TypeScript, Vite, and Lucide React icons.
 
-## Requirements
+## Separate Dashboards
 
-- Node.js 20.19+ or 22.12+
-- Python 3.11+
-- npm
+- **User (Worker) Dashboard (`/worker`)**:
+  - Upcoming shifts count, monthly logged hours, completed assignments
+  - Weekly 7-day availability roster with interactive day chips & master availability switch
+  - Real-time assigned shift tracking with status progression (`Assigned` → `Accepted` → `Reporting` → `Completed`)
+  - Embedded venue maps & Google Maps turn-by-turn navigation links
+  - Browse and apply for open shift opportunities
 
-## Run locally
+- **Organizer Dashboard (`/organizer`)**:
+  - Real-time overview of events managed, crew required vs assigned, and shortage counters
+  - Interactive **Create Event** modal (Title, Venue, Date, Time, Duty, Required crew count)
+  - Managed events cards with live staffing progress bars and shortage warnings
+  - Staffing Requests management to dispatch extra crew and withdraw requests
 
-Start the backend in one PowerShell terminal:
+- **Admin Console (`/admin`)**:
+  - Full management of platform events (approve, reject, delete)
+  - Staffing requests approval & rejection
+  - User account auditing and removal
 
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
-# Set ADMIN_EMAIL and ADMIN_PASSWORD in .env before starting.
-.\.venv\Scripts\python.exe -m uvicorn main:app --reload
-```
+## Running Locally
 
-Start the frontend in another terminal:
+1. Install dependencies:
+   ```powershell
+   cd frontend
+   npm.cmd install
+   ```
 
-```powershell
-cd frontend
-npm.cmd install
-npm.cmd run dev
-```
+2. Start the Vite development server:
+   ```powershell
+   npm.cmd run dev
+   ```
+   The frontend runs on `http://localhost:5173` and proxies `/api` calls to the Node.js backend on `http://127.0.0.1:8000`.
 
-Create a production build with `npm.cmd run build`, or serve the build locally
-with `npm.cmd run preview`.
-
-The VS Code tasks include dependency installation, starting the dev server, and
-building the frontend (`Terminal` → `Run Task`).
-
-The Worker, Organizer, and Admin dashboards use the FastAPI backend and SQLite
-database. Worker and Organizer accounts can be created through the app; Admin
-accounts are provisioned only through backend environment settings. Enquiry
-forms open an email draft to `hello@easyevent.in`; the app does not send or
-store enquiry form details.
-
-## Project layout
-
-- `src/components/` — separate Worker, Organizer, and Admin dashboard files
-- `src/` — React UI, API client, sample data, and styles
-- `index.html`, `vite.config.ts`, `tsconfig*.json` — Vite and TypeScript setup
-- `package.json` — frontend dependencies and scripts
-
-Backend code and backend-only configuration belong in the sibling `../backend`
-directory, not in this frontend.
-
-The workspace root contains the single `.gitignore` for frontend, backend, and
-local development files. Nested ignore files are intentionally not used.
+3. Build for production:
+   ```powershell
+   npm.cmd run build
+   ```
