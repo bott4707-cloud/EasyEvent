@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const [session, events] = await Promise.all([api.reloadState(), api.loadEvents()]);
         setCurrentUser(session.user);
-        try { localStorage.setItem("easyevent_has_account", "true"); } catch {}
+        try { localStorage.setItem("easyevent_has_account", "true"); } catch { }
         setAppData(session.data);
         setPublicEvents(events);
         return;
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isBackendConnected) {
         const session = await api.login(normalizedEmail, password);
         setCurrentUser(session.user);
-        try { localStorage.setItem("easyevent_has_account", "true"); } catch {}
+        try { localStorage.setItem("easyevent_has_account", "true"); } catch { }
         setAppData(session.data);
         const evts = await api.loadEvents().catch(() => session.data.events);
         setPublicEvents(evts);
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isBackendConnected) {
         const session = await api.signup(input);
         setCurrentUser(session.user);
-        try { localStorage.setItem("easyevent_has_account", "true"); } catch {}
+        try { localStorage.setItem("easyevent_has_account", "true"); } catch { }
         setAppData(session.data);
         const evts = await api.loadEvents().catch(() => session.data.events);
         setPublicEvents(evts);

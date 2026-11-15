@@ -10,7 +10,12 @@ __pycache__/
 *.py[cod]
 *.sqlite3
 
-# Environment files are kept out of version control throughout the project.
+# Environment files are strictly kept out of version control throughout the project.
 .env
 .env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
 !.env.example
+!backend/.env.example

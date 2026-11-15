@@ -3,6 +3,12 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import crypto from "node:crypto";
 import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config();
 import {
   hashPassword,
   verifyPassword,
@@ -27,8 +33,6 @@ import {
   deleteAdminUser,
 } from "./db.js";
 import { isSupabaseConfigured } from "./supabase.js";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;

@@ -58,7 +58,7 @@ cd EasyEvent
 
 Copy the environment file:
 ```bash
-cp .env.example backend/.env
+cp backend/.env.example backend/.env
 ```
 
 Set your Supabase credentials in `backend/.env`:
@@ -110,11 +110,8 @@ EasyEvent/
 │   │   ├── context/          # LanguageContext (11 Indian languages) & AuthContext
 │   │   ├── pages/            # HomePage, AuthPage, Role Dashboards
 │   │   └── services/         # API client & backend connection
-│   ├── .env.example          # Frontend environment example
-│   ├── vite.config.ts        # Vite build configuration with proxy
 │   └── package.json
-├── .env.example              # Project root environment example
-├── .gitignore                # Git ignore configuration
+├── .gitignore                # Git ignore configuration (strictly excludes all .env files)
 └── README.md                 # Project documentation
 ```
 
