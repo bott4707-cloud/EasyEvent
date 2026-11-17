@@ -36,6 +36,11 @@ import {
 } from "./db.js";
 import { isSupabaseConfigured } from "./supabase.js";
 import { isPgConfigured } from "./pg.js";
+import {
+  dispatchDatabaseWork,
+  getN8nIntegrationStatus,
+  sendN8nTestEvent,
+} from "./n8n.js";
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -203,6 +208,24 @@ app.post("/api/auth/signup", async (req, res) => {
     setSessionCookie(res, token);
 
     const state = await getDashboardState(user);
+
+    // Identify database work & user details for n8n automation
+    dispatchDatabaseWork({
+      action: "user.signup",
+      workType: "USER_REGISTRATION",
+      table: "users",
+      operation: "INSERT",
+      user,
+      actor: user,
+      payload: {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
+    });
+
     res.status(201).json(state);
   } catch (err) {
     console.error("Signup error", err);
@@ -305,6 +328,26 @@ app.post("/api/worker/apply", authenticateUser, requireRole("worker"), async (re
     const { eventId, duty } = req.body;
     if (!eventId) return res.status(422).json({ detail: "Event ID is required." });
     const shift = await applyForEvent(req.user.id, eventId, duty);
+
+    // Identify database work & user details for n8n automation
+    dispatchDatabaseWork({
+      action: "shift.booked",
+      workType: "SHIFT_BOOKING",
+      table: "shifts",
+      operation: "INSERT",
+      user: req.user,
+      actor: req.user,
+      payload: {
+        shiftId: shift.id,
+        eventId: shift.event_id,
+        title: shift.title,
+        duty: shift.duty,
+        date: shift.date,
+        time: shift.time,
+        status: shift.status,
+      },
+    });
+
     res.status(201).json(shift);
   } catch (err) {
     console.error("Worker apply error", err);
@@ -317,6 +360,22 @@ app.post("/api/worker/cancel-shift", authenticateUser, requireRole("worker"), as
     const { shiftId } = req.body;
     if (!shiftId) return res.status(422).json({ detail: "Shift ID is required." });
     const result = await cancelWorkerShift(req.user.id, shiftId);
+
+    // Identify database work & user details for n8n automation
+    dispatchDatabaseWork({
+      action: "shift.cancelled",
+      workType: "SHIFT_CANCELLATION",
+      table: "shifts",
+      operation: "UPDATE",
+      user: req.user,
+      actor: req.user,
+      payload: {
+        shiftId,
+        eventId: result.eventId,
+        status: "Cancelled",
+      },
+    });
+
     res.json(result);
   } catch (err) {
     console.error("Worker shift cancellation error", err);
@@ -331,6 +390,29 @@ app.post("/api/organizer/attendance", authenticateUser, requireRole("organizer",
       return res.status(422).json({ detail: "Shift ID and attended status (true/false) are required." });
     }
     const result = await verifyAttendance(shiftId, attended);
+
+    // Identify database work & user details for n8n automation
+    dispatchDatabaseWork({
+      action: attended ? "attendance.verified_attended" : "attendance.verified_unattended",
+      workType: "ATTENDANCE_VERIFICATION",
+      table: "shifts",
+      operation: "UPDATE",
+      user: result.worker || null,
+      actor: req.user,
+      targetUser: result.worker || null,
+      payload: {
+        shiftId,
+        title: result.shift?.title,
+        attended,
+        status: result.shift?.status,
+        paymentDelayed: result.shift?.payment_delayed,
+        payoutStatus: result.shift?.payout_status,
+        workerWarnings: result.worker?.warnings || 0,
+        warningReason: result.worker?.warningReason || null,
+        suspendedUntil: result.worker?.suspendedUntil || null,
+      },
+    });
+
     res.json(result);
   } catch (err) {
     console.error("Organizer attendance verification error", err);
@@ -372,6 +454,25 @@ app.post("/api/organizer/events", authenticateUser, requireRole("organizer", "ad
       req.user.id
     );
 
+    // Identify database work & user details for n8n automation
+    dispatchDatabaseWork({
+      action: "event.created",
+      workType: "EVENT_CREATION",
+      table: "events",
+      operation: "INSERT",
+      user: req.user,
+      actor: req.user,
+      payload: {
+        eventId: created.id,
+        title: created.title,
+        venue: created.venue,
+        date: created.date,
+        time: created.time,
+        required: created.required,
+        duty: created.duty,
+      },
+    });
+
     res.status(201).json(created);
   } catch (err) {
     console.error("Create event error", err);
@@ -395,6 +496,22 @@ app.post("/api/organizer/requests", authenticateUser, requireRole("organizer", "
       { eventId, quantity: count, duty: duty || "Event Crew" },
       req.user.id
     );
+
+    // Identify database work & user details for n8n automation
+    dispatchDatabaseWork({
+      action: "request.created",
+      workType: "STAFFING_REQUEST",
+      table: "requests",
+      operation: "INSERT",
+      user: req.user,
+      actor: req.user,
+      payload: {
+        requestId: request.id,
+        eventId: request.event_id,
+        quantity: request.quantity,
+        duty: request.duty,
+      },
+    });
 
     res.status(201).json(request);
   } catch (err) {
@@ -464,6 +581,28 @@ app.delete("/api/admin/users/:id", authenticateUser, requireRole("admin"), async
   } catch (err) {
     console.error("Admin user delete error", err);
     res.status(500).json({ detail: "User could not be deleted." });
+  }
+});
+
+// ==========================================
+// n8n Automation & User Identification Endpoints
+// ==========================================
+
+app.get("/api/n8n/status", (_req, res) => {
+  res.json(getN8nIntegrationStatus());
+});
+
+app.post("/api/n8n/test", async (req, res) => {
+  try {
+    const result = await sendN8nTestEvent(req.body);
+    res.json({
+      success: true,
+      message: "Test database work with user identification dispatched to n8n.",
+      event: result,
+    });
+  } catch (err) {
+    console.error("n8n test dispatch error", err);
+    res.status(500).json({ detail: "Failed to dispatch test n8n event." });
   }
 });
 

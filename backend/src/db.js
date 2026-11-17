@@ -1036,6 +1036,7 @@ export async function verifyAttendance(shiftId, attended) {
         id: worker.id,
         name: worker.name,
         email: worker.email,
+        phone: worker.phone || null,
         warnings: worker.warnings,
         warningReason: worker.warning_reason,
         suspendedUntil: worker.suspended_until,

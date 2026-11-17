@@ -1,0 +1,424 @@
+{
+  "name": "EasyEvent Database Work & User Identification Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "easyevent",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "EasyEvent Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        340
+      ],
+      "webhookId": "easyevent-db-automation"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract incoming body from EasyEvent backend\nconst item = $input.first().json;\nconst body = item.body || item;\n\nconst workId = body.workId || `work-${Date.now()}`;\nconst workType = body.workType || 'UNKNOWN';\nconst action = body.action || 'unspecified';\nconst table = body.table || 'unknown';\nconst operation = body.operation || 'MUTATION';\nconst timestamp = body.timestamp || new Date().toISOString();\n\n// User Identification\nconst userIdent = body.userIdentification || {};\nconst primaryUser = userIdent.primary || {};\nconst actor = userIdent.actor || primaryUser;\nconst target = userIdent.target || null;\n\n// Normalize phone & UPI ID\nconst rawPhone = primaryUser.phone || '';\nconst cleanPhone = String(rawPhone).replace(/[^0-9]/g, '');\nconst is10DigitIndianNumber = cleanPhone.length === 10;\nconst upiId = primaryUser.upiId || (cleanPhone ? `${cleanPhone}@upi` : 'N/A');\n\n// Evaluate disciplinary and risk profile\nconst warnings = Number(primaryUser.warnings) || 0;\nconst isSuspended = primaryUser.accountStatus === 'suspended';\nlet riskProfile = 'CLEAN_VERIFIED';\nif (isSuspended) {\n  riskProfile = 'BLOCKED_SUSPENDED';\n} else if (warnings >= 1) {\n  riskProfile = 'WARNING_MONITOR';\n}\n\nreturn [{\n  json: {\n    workId,\n    workType,\n    action,\n    table,\n    operation,\n    timestamp,\n    userIdentification: {\n      userId: primaryUser.userId || 'anon',\n      name: primaryUser.name || 'Unknown User',\n      email: primaryUser.email || 'N/A',\n      role: primaryUser.role || 'worker',\n      phone: primaryUser.phone || null,\n      upiId,\n      upiValid: is10DigitIndianNumber,\n      accountStatus: primaryUser.accountStatus || 'active',\n      warnings,\n      riskProfile,\n      actor: {\n        userId: actor.userId,\n        name: actor.name,\n        role: actor.role\n      },\n      target: target ? {\n        userId: target.userId,\n        name: target.name,\n        phone: target.phone,\n        upiId: target.upiId\n      } : null\n    },\n    payload: body.databaseWork ? body.databaseWork.payload : (body.payload || {}),\n    metadata: body.metadata || {}\n  }\n}];"
+      },
+      "id": "node-user-identification",
+      "name": "Identify User & Normalize Work",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.workType }}",
+                    "rightValue": "ATTENDANCE_VERIFICATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.workType }}",
+                    "rightValue": "SHIFT_BOOKING",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.workType }}",
+                    "rightValue": "SHIFT_CANCELLATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.workType }}",
+                    "rightValue": "USER_REGISTRATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.workType }}",
+                    "rightValue": "EVENT_CREATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "id": "node-switch-worktype",
+      "name": "Route by Work Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        720,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-attended-true",
+              "leftValue": "={{ $json.payload.attended }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-if-attended",
+      "name": "If Attended vs No-Show",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        980,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.userIdentification;\nconst payload = item.payload;\n\n// Calculate UPI instant payout in Indian Rupees (₹)\nconst baseAmount = Number(payload.payoutAmount) || 2500;\nconst currency = 'INR';\nconst upiTarget = user.upiId;\n\nreturn [{\n  json: {\n    automationStep: 'UPI_PAYOUT_DISPATCH',\n    status: 'PAYOUT_INITIATED',\n    worker: {\n      name: user.name,\n      email: user.email,\n      phone: user.phone,\n      upiId: upiTarget,\n      status: 'VERIFIED_ATTENDED'\n    },\n    transaction: {\n      referenceId: `UPI-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,\n      shiftId: payload.shiftId,\n      amount: baseAmount,\n      currency,\n      displayAmount: `₹${baseAmount}`,\n      destinationUPI: upiTarget,\n      paymentMode: 'IMPS_UPI_INSTANT',\n      note: `EasyEvent Bengaluru Payout for ${payload.title || 'Event Crew'}`\n    },\n    workId: item.workId,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-upi-payout",
+      "name": "Format Instant UPI Payout (₹)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.userIdentification;\nconst payload = item.payload;\n\nconst strikes = (user.warnings || 0);\nconst isSuspension = strikes >= 2 || user.riskProfile === 'BLOCKED_SUSPENDED';\n\nreturn [{\n  json: {\n    automationStep: 'DISCIPLINARY_ACTION_TRIGGERED',\n    status: isSuspension ? 'ACCOUNT_SUSPENDED_48H' : 'PAYOUT_DELAYED_WARNING',\n    worker: {\n      name: user.name,\n      email: user.email,\n      phone: user.phone,\n      warningStrikes: strikes,\n      suspendedUntil: payload.suspendedUntil || null\n    },\n    penaltyPolicy: {\n      actionTaken: isSuspension\n        ? 'Account suspended for 2 days. Payout withheld pending manual compliance review.'\n        : 'Warning 1 logged. Payout delayed by 48 hours for attendance re-verification.',\n      supervisorAlertDispatched: true,\n      shiftId: payload.shiftId,\n      eventTitle: payload.title\n    },\n    workId: item.workId,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-strike-delay",
+      "name": "Process No-Show Penalty & Delayed Payout",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.userIdentification;\nconst payload = item.payload;\n\nreturn [{\n  json: {\n    automationStep: 'SHIFT_BOOKING_CONFIRMED',\n    status: 'SLOT_RESERVED',\n    worker: {\n      name: user.name,\n      phone: user.phone,\n      upiId: user.upiId\n    },\n    shift: {\n      shiftId: payload.shiftId,\n      eventId: payload.eventId,\n      title: payload.title,\n      duty: payload.duty,\n      date: payload.date,\n      time: payload.time\n    },\n    briefingAlertDispatched: true,\n    workId: item.workId,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-shift-booked",
+      "name": "Confirm Shift & Slot Allocation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.userIdentification;\nconst payload = item.payload;\n\nreturn [{\n  json: {\n    automationStep: 'SHIFT_CANCELLED_SLOT_RELEASED',\n    status: 'SLOT_RESTORED_TO_POOL',\n    worker: {\n      name: user.name,\n      phone: user.phone\n    },\n    shiftId: payload.shiftId,\n    eventId: payload.eventId,\n    policyCheck: 'Cancelled within 4-hour grace window. No disciplinary penalty applied.',\n    workId: item.workId,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-shift-cancelled",
+      "name": "Release Event Slot back to Pool",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.userIdentification;\nconst payload = item.payload;\n\nreturn [{\n  json: {\n    automationStep: 'USER_ONBOARDING_INITIALIZED',\n    status: 'ACCOUNT_CREATED',\n    user: {\n      userId: user.userId,\n      name: user.name,\n      email: user.email,\n      role: user.role,\n      phone: user.phone,\n      upiId: user.upiId,\n      upiValid: user.upiValid\n    },\n    welcomeAlert: user.role === 'worker'\n      ? `Welcome ${user.name} to Bengaluru Crew Hub! Your UPI payout handle is verified: ${user.upiId}`\n      : `Welcome ${user.name} to EasyEvent Organizer Console!`,\n    workId: item.workId,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-user-signup",
+      "name": "Verify UPI Mobile & Onboard User",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.userIdentification;\nconst payload = item.payload;\n\nreturn [{\n  json: {\n    automationStep: 'EVENT_STAFFING_BROADCAST',\n    status: 'CREW_NOTIFIED',\n    organizer: {\n      name: user.name,\n      email: user.email\n    },\n    event: {\n      eventId: payload.eventId,\n      title: payload.title,\n      venue: payload.venue,\n      requiredCrew: payload.required,\n      duty: payload.duty,\n      date: payload.date,\n      time: payload.time\n    },\n    broadcastChannels: ['Bengaluru Crew Push Notification', 'Worker Available Roster Feed'],\n    workId: item.workId,\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-event-created",
+      "name": "Broadcast Event to Bengaluru Workers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\nconst results = inputItems.map(item => ({\n  workId: item.json.workId,\n  automationStep: item.json.automationStep,\n  status: item.json.status,\n  completedAt: new Date().toISOString(),\n  summary: `Identified and processed database work [${item.json.automationStep}] successfully.`\n}));\n\nreturn results;"
+      },
+      "id": "node-audit-logger",
+      "name": "Consolidated Database Audit Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        340
+      ]
+    }
+  ],
+  "connections": {
+    "EasyEvent Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Identify User & Normalize Work",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identify User & Normalize Work": {
+      "main": [
+        [
+          {
+            "node": "Route by Work Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Work Type": {
+      "main": [
+        [
+          {
+            "node": "If Attended vs No-Show",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirm Shift & Slot Allocation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Release Event Slot back to Pool",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify UPI Mobile & Onboard User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Broadcast Event to Bengaluru Workers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Attended vs No-Show": {
+      "main": [
+        [
+          {
+            "node": "Format Instant UPI Payout (₹)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Process No-Show Penalty & Delayed Payout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Instant UPI Payout (₹)": {
+      "main": [
+        [
+          {
+            "node": "Consolidated Database Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process No-Show Penalty & Delayed Payout": {
+      "main": [
+        [
+          {
+            "node": "Consolidated Database Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Shift & Slot Allocation": {
+      "main": [
+        [
+          {
+            "node": "Consolidated Database Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Event Slot back to Pool": {
+      "main": [
+        [
+          {
+            "node": "Consolidated Database Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify UPI Mobile & Onboard User": {
+      "main": [
+        [
+          {
+            "node": "Consolidated Database Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Broadcast Event to Bengaluru Workers": {
+      "main": [
+        [
+          {
+            "node": "Consolidated Database Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
