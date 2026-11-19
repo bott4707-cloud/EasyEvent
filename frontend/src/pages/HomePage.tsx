@@ -8,16 +8,15 @@ import {
   IndianRupee,
   CalendarCheck,
   Zap,
-  Globe,
   Clock,
   Layers,
-  MapPin,
-  Check,
   Shield,
+  Check,
+  Globe,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useLanguage, INDIAN_LANGUAGES, type SupportedLanguage } from "../context/LanguageContext";
 import { Button } from "../components/common/Button";
+import { Hero3DVisual } from "../components/home/Hero3DVisual";
 
 interface HomePageProps {
   navigate: (route: string) => void;
@@ -25,11 +24,6 @@ interface HomePageProps {
 
 export function HomePage({ navigate }: HomePageProps) {
   const { currentUser } = useAuth();
-  const { language, setLanguage } = useLanguage();
-
-  const handleLanguageSelect = (code: SupportedLanguage) => {
-    setLanguage(code);
-  };
 
   return (
     <div className="homepage-wrapper">
@@ -123,72 +117,15 @@ export function HomePage({ navigate }: HomePageProps) {
             </div>
           </div>
 
-          {/* Right Column: Bengaluru Vidhana Soudha & Illuminated Event Imagery */}
+          {/* Right Column: 3D Animated Interactive Event Operations Visual */}
           <div className="hero-media-col">
-            <div className="hero-organic-image-card">
-              <img
-                src="https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=1200&auto=format&fit=crop&q=85"
-                alt="Bengaluru Grand Event Lighting & Crowd"
-                className="hero-main-photo"
-                loading="eager"
-              />
-
-              {/* Organic Curved Gradient Blend Overlay */}
-              <div className="hero-image-curve-blend" />
-
-              {/* Handwritten-style Overlay Badge */}
-              <div className="hero-handwritten-overlay">
-                <span className="overlay-handwritten-text">Bengaluru Events. Better.</span>
-                <span className="overlay-sub-tag">
-                  <MapPin size={11} style={{ display: "inline", marginRight: 3 }} />
-                  Vidhana Soudha · Palace Grounds · BIEC
-                </span>
-              </div>
-
-              {/* Live Metric Bubble Overlay */}
-              <div className="hero-live-metric-pill">
-                <span className="pulse-indicator-dot" />
-                <span>500+ Verified Bengaluru Crew On-Duty</span>
-              </div>
-            </div>
+            <Hero3DVisual />
           </div>
         </div>
       </section>
 
       {/* ======================================================== */}
-      {/* 2. ROUNDED LAVENDER LANGUAGE BAR (11 Indian Languages)   */}
-      {/* ======================================================== */}
-      <section className="language-bar-section" id="languages-bar">
-        <div className="language-bar-container">
-          <div className="language-bar-header">
-            <Globe size={18} className="lang-globe-icon" />
-            <span className="language-bar-title">Available in 11 Indian Languages:</span>
-          </div>
-
-          <div className="language-chips-scroll-wrapper" role="radiogroup" aria-label="Choose platform language">
-            {INDIAN_LANGUAGES.map((lang) => {
-              const isActive = language === lang.code;
-              return (
-                <button
-                  key={lang.code}
-                  type="button"
-                  className={`lang-chip-btn ${isActive ? "active" : ""}`}
-                  onClick={() => handleLanguageSelect(lang.code)}
-                  aria-pressed={isActive}
-                  title={`Switch platform language to ${lang.name} (${lang.nativeName})`}
-                >
-                  <span className="chip-native-text">{lang.nativeName}</span>
-                  <span className="chip-english-label">({lang.name})</span>
-                  {isActive && <Check size={12} className="chip-check-icon" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* ======================================================== */}
-      {/* 3. RESPONSIVE DASHBOARD PREVIEWS (3 Side-by-Side/Stacked)*/}
+      {/* 2. RESPONSIVE DASHBOARD PREVIEWS (3 Side-by-Side/Stacked)*/}
       {/* ======================================================== */}
       <section className="dashboard-previews-section" id="dashboard-previews">
         <div className="section-heading-center">

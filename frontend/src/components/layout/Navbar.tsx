@@ -2,14 +2,12 @@ import { useState, useEffect } from "react";
 import {
   CalendarDays,
   LogOut,
-  LogIn,
   User,
   Shield,
   Briefcase,
   Sparkles,
   Menu,
   X,
-  Globe,
   Layers,
   Info,
   ArrowRight,
@@ -103,7 +101,7 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
             </button>
           </div>
 
-          {/* Desktop Navigation Links: Home, Features, Languages, About */}
+          {/* Desktop Navigation Links: Home, Features, About */}
           <nav className="desktop-nav" aria-label="Main Navigation">
             {/* When NOT logged in: Show Public Marketing Nav */}
             {!currentUser && (
@@ -122,14 +120,6 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
                   onClick={() => scrollToSection("features")}
                 >
                   <Layers size={14} style={{ marginRight: 5 }} /> Features
-                </button>
-
-                <button
-                  type="button"
-                  className="nav-item"
-                  onClick={() => scrollToSection("languages-bar")}
-                >
-                  <Globe size={14} style={{ marginRight: 5 }} /> Languages
                 </button>
 
                 <button
@@ -192,7 +182,7 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
 
             <div className="nav-divider" />
 
-            {/* User Session Actions or Purple Gradient Get Started Button */}
+            {/* User Session Actions or Purple Gradient Get Started Button (Login removed per request) */}
             {currentUser ? (
               <div className="user-nav-actions">
                 <div className="user-profile-pill">
@@ -218,15 +208,7 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
                 </button>
               </div>
             ) : (
-              <div className="auth-nav-buttons" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleNav("/auth/login")}
-                >
-                  <LogIn size={14} style={{ marginRight: 5 }} />
-                  {t("nav_login")}
-                </Button>
+              <div className="auth-nav-buttons" style={{ display: "flex", alignItems: "center" }}>
                 <Button
                   variant="primary"
                   size="sm"
@@ -260,65 +242,47 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
         {mobileMenuOpen && (
           <div className="mobile-menu-drawer animate-slide-down">
             <div className="mobile-menu-inner">
-              {/* Language Switcher Bar at top of Mobile Menu (Replaces generic 'Navigation' title) */}
-              <div className="mobile-drawer-lang-header">
-                <div className="mobile-drawer-lang-title">
-                  <Globe size={16} className="text-purple" />
-                  <span>Language / ಭಾಷೆ / भाषा:</span>
-                </div>
-                <LanguageSelector variant="header" />
-              </div>
-
               <nav className="mobile-nav-links" aria-label="Mobile Navigation">
-                {!currentUser ? (
+                {!currentUser && (
+                  <button
+                    type="button"
+                    className={`mobile-nav-link ${currentPath === "/" ? "active" : ""}`}
+                    onClick={() => handleNav("/")}
+                  >
+                    <span>{t("nav_home")}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="mobile-nav-link"
+                  onClick={() => scrollToSection("features")}
+                >
+                  <Layers size={16} />
+                  <span>Features & Workflow</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="mobile-nav-link"
+                  onClick={() => scrollToSection("dashboard-previews")}
+                >
+                  <Briefcase size={16} />
+                  <span>Dashboard Previews</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`mobile-nav-link ${currentPath === "/enquiry" ? "active" : ""}`}
+                  onClick={() => handleNav("/enquiry")}
+                >
+                  <Info size={16} />
+                  <span>About & Contact</span>
+                </button>
+
+                {currentUser && (
                   <>
-                    <button
-                      type="button"
-                      className={`mobile-nav-link ${currentPath === "/" ? "active" : ""}`}
-                      onClick={() => handleNav("/")}
-                    >
-                      <span>{t("nav_home")}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="mobile-nav-link"
-                      onClick={() => scrollToSection("features")}
-                    >
-                      <Layers size={16} />
-                      <span>Features & Workflow</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="mobile-nav-link"
-                      onClick={() => scrollToSection("languages-bar")}
-                    >
-                      <Globe size={16} />
-                      <span>11 Indian Languages</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="mobile-nav-link"
-                      onClick={() => scrollToSection("dashboard-previews")}
-                    >
-                      <Briefcase size={16} />
-                      <span>Dashboard Previews</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`mobile-nav-link ${currentPath === "/enquiry" ? "active" : ""}`}
-                      onClick={() => handleNav("/enquiry")}
-                    >
-                      <Info size={16} />
-                      <span>About & Contact</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {/* Strictly Logged In: Only role dashboard and support (NO 'Home') */}
+                    <div className="mobile-nav-divider" />
                     <button
                       type="button"
                       className={`mobile-nav-link active-role`}
@@ -338,15 +302,6 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
                           ? "Admin Console"
                           : "Crew's Dashboard"}
                       </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`mobile-nav-link ${currentPath === "/enquiry" ? "active" : ""}`}
-                      onClick={() => handleNav("/enquiry")}
-                    >
-                      <Info size={16} />
-                      <span>Help & Contact Support</span>
                     </button>
                   </>
                 )}
@@ -382,15 +337,6 @@ export function Navbar({ currentPath, navigate }: NavbarProps) {
                       onClick={() => handleNav("/auth/signup")}
                     >
                       Get Started Free
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      size="lg"
-                      icon={<LogIn size={16} />}
-                      onClick={() => handleNav("/auth/login")}
-                    >
-                      Sign In to Account
                     </Button>
                   </div>
                 )}
