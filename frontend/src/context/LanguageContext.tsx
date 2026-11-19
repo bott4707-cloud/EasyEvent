@@ -127,7 +127,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     pillar_crew_title: "Reliable Shifts, Guaranteed Daily Payouts",
     pillar_crew_desc: "Work with Bengaluru's premier exhibitions, concerts, tech expos, and galas on your own schedule.",
     pillar_crew_f1_strong: "Transparent Daily ₹ Earnings:",
-    pillar_crew_f1_text: "Calculated dynamically based on duty hourly rates and hours attended.",
+    pillar_crew_f1_text: "Calculated dynamically based on event duty and hours attended.",
     pillar_crew_f2_strong: "Private Organizer Briefings:",
     pillar_crew_f2_text: "Access confidential dress codes, supervisor phone numbers, and back-entrance passes.",
     pillar_crew_f3_strong: "Venue Place Photos:",

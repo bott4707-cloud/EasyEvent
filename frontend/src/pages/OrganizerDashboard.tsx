@@ -26,7 +26,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { LanguageSelector } from "../components/common/LanguageSelector";
-import { DUTIES, formatDate, formatTime, getDutyHourlyRate, dateKey } from "../data/mockData";
+import { DUTIES, formatDate, formatTime, dateKey } from "../data/mockData";
 import { optimizeImage } from "../utils/imageOptimizer";
 import { type Event } from "../types";
 import { Button } from "../components/common/Button";
@@ -468,7 +468,6 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
         <div className="shifts-list-stack">
           {visibleEvents.map((event) => {
             const shortage = Math.max(0, event.required - event.assigned);
-            const rate = getDutyHourlyRate(event.duty);
             const images = event.images && event.images.length > 0 ? event.images : null;
 
             return (
@@ -500,9 +499,6 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
                   <div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                       <span className="shift-duty-pill">{event.duty}</span>
-                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--emerald)" }}>
-                        ₹{rate}/hr standard crew rate
-                      </span>
                     </div>
                     <h3 className="shift-title">{event.title}</h3>
                     <div className="shift-date-time-row">
@@ -782,7 +778,26 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
               <Card key={shift.id} variant="default" className="shift-item-card">
                 <div className="shift-card-top">
                   <div>
-                    <span className="shift-duty-pill">{shift.duty}</span>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                      <span className="shift-duty-pill">{shift.duty}</span>
+                      {(() => {
+                        const matchedWorker = registeredWorkers.find(
+                          (w) => w.id === shift.worker_id || w.email.toLowerCase() === shift.worker_id?.toLowerCase()
+                        );
+                        const isWorkerAvail = matchedWorker ? Boolean(matchedWorker.available) : true;
+                        return (
+                          <span
+                            className={`roster-status-badge ${isWorkerAvail ? "available" : "unavailable"}`}
+                            style={{ fontSize: "0.72rem", padding: "2px 8px" }}
+                          >
+                            <span className="status-indicator-dot" />
+                            {matchedWorker
+                              ? `${matchedWorker.name}: ${isWorkerAvail ? "Available for Duty" : "Currently Off-Duty"}`
+                              : "Crew Assigned"}
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <h4 style={{ fontSize: "1.05rem", fontWeight: 700, margin: "6px 0" }}>{shift.title}</h4>
                     <div className="shift-date-time-row">
                       <span>

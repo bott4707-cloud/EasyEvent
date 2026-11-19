@@ -214,14 +214,14 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
     })
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  const handleToggleDate = async (key: string) => {
+  const handleToggleDate = (key: string) => {
     const current = appData.availableDates || [];
     const updated = current.includes(key)
       ? current.filter((d) => d !== key)
       : [...current, key];
 
-    await updateAvailability({ availableDates: updated });
-    showToast("Weekly availability dates updated.");
+    // Instant optimistic update (0ms latency)
+    void updateAvailability({ availableDates: updated });
   };
 
   const handleApply = async (eventId: string, duty: string) => {
@@ -446,7 +446,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
               <FileText size={36} style={{ color: "var(--ink-muted)", margin: "0 auto 12px" }} />
               <h4>No attended events recorded yet</h4>
               <p className="muted-text" style={{ maxWidth: 440, margin: "0 auto" }}>
-                When you check in and complete shifts from your schedule below, your verified daily earnings will appear here with hourly breakdowns.
+                When you check in and complete shifts from your schedule below, your verified daily earnings will appear here with duty breakdowns.
               </p>
             </div>
           )}
