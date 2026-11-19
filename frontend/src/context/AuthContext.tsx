@@ -1,12 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import type { Account, AppData, Event, EventStatus, RequestStatus, Role, ShiftStatus, StaffingRequest, Shift } from "../types";
 import { api, ApiError, type EventInput, type SignupInput } from "../api/client";
-import {
-  INITIAL_EVENTS,
-  INITIAL_REQUESTS,
-  INITIAL_SHIFTS,
-  INITIAL_USERS,
-} from "../data/mockData";
 
 interface AuthContextValue {
   currentUser: Account | null;
@@ -32,34 +26,44 @@ interface AuthContextValue {
   updateAdminRequest: (id: string, status: RequestStatus) => Promise<void>;
   deleteAdminRequest: (id: string) => Promise<void>;
   deleteAdminUser: (id: string) => Promise<void>;
+  uploadImage: (image: string, filename?: string) => Promise<{ url: string; storage: string; size: number }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = "easyevent_app_state_v2";
+const LOCAL_STORAGE_KEY = "easyevent_app_state_v3";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
   const [isBackendConnected, setIsBackendConnected] = useState(false);
 
-  const [publicEvents, setPublicEvents] = useState<Event[]>(INITIAL_EVENTS);
+  const [publicEvents, setPublicEvents] = useState<Event[]>([]);
   const [appData, setAppData] = useState<AppData>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          Array.isArray(parsed.users) &&
+          parsed.users.some((u: Account) => u.id?.startsWith("demo-") || u.id?.startsWith("worker-demo"))
+        ) {
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+        } else if (parsed && typeof parsed === "object") {
+          return parsed;
+        }
       }
     } catch (e) {
       console.warn("Could not read local storage state", e);
     }
     return {
-      users: INITIAL_USERS,
-      events: INITIAL_EVENTS,
-      requests: INITIAL_REQUESTS,
-      shifts: INITIAL_SHIFTS,
-      available: true,
-      availableDates: ["2026-11-14", "2026-11-15", "2026-11-21"],
+      users: [],
+      events: [],
+      requests: [],
+      shifts: [],
+      available: false,
+      availableDates: [],
     };
   });
 
@@ -562,6 +566,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [isBackendConnected, refreshState]
   );
 
+  const uploadImage = useCallback(
+    async (image: string, filename?: string) => {
+      return await api.uploadImage(image, filename);
+    },
+    []
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -588,6 +599,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateAdminRequest,
         deleteAdminRequest,
         deleteAdminUser,
+        uploadImage,
       }}
     >
       {children}

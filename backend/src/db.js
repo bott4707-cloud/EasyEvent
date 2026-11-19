@@ -198,57 +198,16 @@ const INITIAL_SHIFTS = [
 ];
 
 // In-Memory store for offline/standalone mode
-const defaultWorkerHash = hashPassword("WorkerPassword2026!");
-const defaultOrgHash = hashPassword("OrganizerPassword2026!");
 const defaultAdminHash = hashPassword("AdminPassword2026!");
 
 const memoryStore = {
   users: [
     {
-      id: "demo-worker-1",
-      name: "Rohan Verma",
-      email: "worker@easyevent.in",
-      role: "worker",
-      password_salt: defaultWorkerHash.salt,
-      password_hash: defaultWorkerHash.hash,
-      available: true,
-      available_dates: ["2026-11-15", "2026-11-16", "2026-11-21", "2026-11-22"],
-    },
-    {
-      id: "demo-worker-2",
-      name: "Pooja Hegde",
-      email: "pooja.crew@easyevent.in",
-      role: "worker",
-      password_salt: defaultWorkerHash.salt,
-      password_hash: defaultWorkerHash.hash,
-      available: true,
-      available_dates: ["2026-11-15", "2026-11-17", "2026-11-18", "2026-11-19"],
-    },
-    {
-      id: "demo-worker-3",
-      name: "Vikram Sen",
-      email: "vikram.crew@easyevent.in",
-      role: "worker",
-      password_salt: defaultWorkerHash.salt,
-      password_hash: defaultWorkerHash.hash,
-      available: false,
-      available_dates: [],
-    },
-    {
-      id: "demo-org-1",
-      name: "Ananya Rao",
-      email: "organizer@easyevent.in",
-      role: "organizer",
-      password_salt: defaultOrgHash.salt,
-      password_hash: defaultOrgHash.hash,
-      available: false,
-      available_dates: [],
-    },
-    {
-      id: "demo-admin-1",
-      name: "Administrator",
+      id: "admin-root",
+      name: "EasyEvent Administrator",
       email: "admin@easyevent.in",
       role: "admin",
+      phone: "9845012345",
       password_salt: defaultAdminHash.salt,
       password_hash: defaultAdminHash.hash,
       available: false,
@@ -256,7 +215,7 @@ const memoryStore = {
     },
   ],
   events: [...INITIAL_EVENTS],
-  shifts: [...INITIAL_SHIFTS],
+  shifts: [],
   requests: [],
   sessions: [],
 };
@@ -621,7 +580,7 @@ export async function getDashboardState(user) {
         const [eRes, sRes] = await withTimeout(
           Promise.all([
             supabase.from("events").select("*").eq("status", "Published").order("date"),
-            supabase.from("shifts").select("*").or(`worker_id.eq.${user.id},worker_id.is.null`).order("date"),
+            supabase.from("shifts").select("*").eq("worker_id", user.id).order("date"),
           ]),
           1500
         );
@@ -663,7 +622,7 @@ export async function getDashboardState(user) {
       shifts = memoryStore.shifts.filter((s) => eventIds.has(s.event_id));
     } else {
       events = memoryStore.events.filter((e) => e.status === "Published");
-      shifts = memoryStore.shifts.filter((s) => s.worker_id === user.id || !s.worker_id);
+      shifts = memoryStore.shifts.filter((s) => s.worker_id === user.id);
     }
   }
 

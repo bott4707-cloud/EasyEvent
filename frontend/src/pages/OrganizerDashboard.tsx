@@ -20,12 +20,14 @@ import {
   UserCheck,
   UserX,
   CalendarDays,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { LanguageSelector } from "../components/common/LanguageSelector";
 import { DUTIES, formatDate, formatTime, getDutyHourlyRate, dateKey } from "../data/mockData";
+import { optimizeImage } from "../utils/imageOptimizer";
 import { type Event } from "../types";
 import { Button } from "../components/common/Button";
 import { Card } from "../components/common/Card";
@@ -67,6 +69,7 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
     cancelRequest,
     updateAdminEvent,
     verifyAttendance,
+    uploadImage,
   } = useAuth();
   const { t } = useLanguage();
   const { showToast } = useToast();
@@ -74,6 +77,7 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [verifyingShiftId, setVerifyingShiftId] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Form states for creating event
   const [eventTitle, setEventTitle] = useState("");
@@ -181,8 +185,8 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
   const registeredWorkers = appData.users.filter((u) => u.role === "worker");
   const today = new Date();
 
-  // Handle local image file upload (1 or 2 images)
-  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  // Handle local image file upload with client-side WebP compression & Supabase Storage upload
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -192,16 +196,28 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
     }
 
     const file = files[0];
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        setEventImages((prev) => (prev.length < 2 ? [...prev, dataUrl] : prev));
-        showToast("Place photo added! (Max 2 photos)");
-      }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
+    setIsUploadingPhoto(true);
+
+    try {
+      // 1. Compress image client-side to WebP (max 1280px maintaining aspect ratio)
+      const optimized = await optimizeImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 });
+
+      // 2. Upload compressed image to Supabase Storage
+      const uploadRes = await uploadImage(optimized.dataUrl, file.name);
+      const finalUrl = uploadRes?.url || optimized.dataUrl;
+
+      setEventImages((prev) => (prev.length < 2 ? [...prev, finalUrl] : prev));
+      showToast(
+        `Photo optimized & stored! Saved ${optimized.savingsPercent}% (${(optimized.optimizedSize / 1024).toFixed(0)} KB WebP)`,
+        "success"
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to optimize and upload image.";
+      showToast(msg, "error");
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = "";
+    }
   };
 
   const handleAddPresetPhoto = (url: string) => {
@@ -588,6 +604,30 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
               </Card>
             );
           })}
+          {visibleEvents.length === 0 && (
+            <Card className="empty-requests-card" style={{ padding: 36, textAlign: "center" }}>
+              <Building2 size={36} style={{ margin: "0 auto 12px", color: "var(--ink-muted)", opacity: 0.7 }} />
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 6 }}>
+                {myEvents.length === 0 ? "No Events Created Yet" : "No Events Match Filter"}
+              </h3>
+              <p className="muted-text" style={{ maxWidth: 460, margin: "0 auto 16px", fontSize: "0.88rem" }}>
+                {myEvents.length === 0
+                  ? "You haven't posted any events yet. Publish your first event to recruit verified crew in Bengaluru."
+                  : "Try switching filter to 'All Events'."}
+              </p>
+              {myEvents.length === 0 && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  style={{ background: "var(--organizer)" }}
+                  icon={<Plus size={14} />}
+                  onClick={() => setIsCreateModalOpen(true)}
+                >
+                  Post First Event
+                </Button>
+              )}
+            </Card>
+          )}
         </div>
       </section>
 
@@ -898,19 +938,35 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
 
             <div className="photo-uploader-box">
               <label
-                className={`btn btn-outline btn-sm ${eventImages.length >= 2 ? "disabled" : ""}`}
-                style={{ cursor: eventImages.length >= 2 ? "not-allowed" : "pointer" }}
+                className={`btn btn-outline btn-sm ${eventImages.length >= 2 || isUploadingPhoto ? "disabled" : ""}`}
+                style={{ cursor: eventImages.length >= 2 || isUploadingPhoto ? "not-allowed" : "pointer" }}
               >
-                <Camera size={14} />
-                <span>Upload Venue Photo (File)</span>
+                {isUploadingPhoto ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Compressing & Uploading to Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={14} />
+                    <span>Upload Venue Photo (File)</span>
+                  </>
+                )}
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleFileUpload}
-                  disabled={eventImages.length >= 2}
+                  disabled={eventImages.length >= 2 || isUploadingPhoto}
                   style={{ display: "none" }}
                 />
               </label>
+
+              {isUploadingPhoto && (
+                <div style={{ marginTop: "6px", fontSize: "0.78rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Resizing to 1280px WebP and uploading to Supabase Storage bucket...</span>
+                </div>
+              )}
 
               <div style={{ margin: "8px 0 4px", fontSize: "0.78rem", color: "var(--ink-muted)" }}>
                 Or select from iconic Bengaluru venue photo presets:
@@ -996,6 +1052,7 @@ export function OrganizerDashboard({ navigate }: { navigate: (route: string) => 
               style={{ background: "var(--organizer)" }}
               type="submit"
               loading={isSubmittingEvent}
+              disabled={isSubmittingEvent || isUploadingPhoto}
               icon={<Sparkles size={16} />}
             >
               Save & Publish Event

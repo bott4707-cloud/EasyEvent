@@ -93,6 +93,11 @@ export const api = {
     }),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   reloadState: () => request<AppState>("/api/state"),
+  uploadImage: (image: string, filename?: string) =>
+    request<{ url: string; storage: string; size: number }>("/api/upload/image", {
+      method: "POST",
+      body: JSON.stringify({ image, filename }),
+    }),
   createEvent: (input: EventInput) =>
     request<Event>("/api/organizer/events", {
       method: "POST",

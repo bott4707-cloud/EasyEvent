@@ -34,7 +34,7 @@ import {
   deleteAdminRequest,
   deleteAdminUser,
 } from "./db.js";
-import { isSupabaseConfigured } from "./supabase.js";
+import { supabase, isSupabaseConfigured } from "./supabase.js";
 import { isPgConfigured } from "./pg.js";
 import {
   dispatchDatabaseWork,
@@ -83,7 +83,8 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
 // Helper: Session Cookie Manager
 function setSessionCookie(res, token) {
@@ -417,6 +418,73 @@ app.post("/api/organizer/attendance", authenticateUser, requireRole("organizer",
   } catch (err) {
     console.error("Organizer attendance verification error", err);
     res.status(500).json({ detail: err.message || "Attendance could not be recorded." });
+  }
+});
+
+// ==========================================
+// Image Upload & Storage Optimization
+// ==========================================
+
+app.post("/api/upload/image", authenticateUser, async (req, res) => {
+  try {
+    const { image, filename } = req.body;
+    if (!image) {
+      return res.status(422).json({ detail: "Image data is required." });
+    }
+
+    // Extract base64 payload
+    const matches = image.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    let mimeType = "image/webp";
+    let buffer;
+
+    if (matches && matches.length === 3) {
+      mimeType = matches[1];
+      buffer = Buffer.from(matches[2], "base64");
+    } else {
+      buffer = Buffer.from(image, "base64");
+    }
+
+    if (buffer.length > 12 * 1024 * 1024) {
+      return res.status(422).json({ detail: "Image size exceeds 12MB limit." });
+    }
+
+    const ext = mimeType.includes("webp") ? "webp" : mimeType.includes("png") ? "png" : "jpg";
+    const objectPath = `events/${Date.now()}-${crypto.randomBytes(6).toString("hex")}.${ext}`;
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.storage
+        .from("event-images")
+        .upload(objectPath, buffer, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (!error) {
+        const { data: pubData } = supabase.storage
+          .from("event-images")
+          .getPublicUrl(objectPath);
+
+        return res.json({
+          url: pubData.publicUrl,
+          storage: "supabase",
+          path: objectPath,
+          size: buffer.length,
+          mimeType,
+        });
+      }
+      console.warn("Supabase storage upload returned error, falling back to optimized inline:", error.message);
+    }
+
+    // Standalone fallback
+    res.json({
+      url: image,
+      storage: "inline-optimized",
+      size: buffer.length,
+      mimeType,
+    });
+  } catch (err) {
+    console.error("Image upload error", err);
+    res.status(500).json({ detail: "Failed to upload and store image." });
   }
 });
 

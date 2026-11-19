@@ -790,12 +790,25 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
           })}
 
           {visibleShifts.length === 0 && (
-            <Card className="empty-shifts-card">
-              <AlertCircle size={36} className="empty-shifts-icon" />
-              <h3>No shifts in this filter</h3>
-              <p>You have no {filter} shifts at this time.</p>
-              <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-                Find Open Opportunities
+            <Card className="empty-shifts-card" style={{ textAlign: "center", padding: "36px 20px" }}>
+              <CalendarCheck size={40} className="empty-shifts-icon" style={{ margin: "0 auto 12px", color: "var(--primary)" }} />
+              <h3 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "6px" }}>
+                {filter === "all" ? "No shifts booked yet" : `No ${filter} shifts`}
+              </h3>
+              <p style={{ maxWidth: 440, margin: "0 auto 16px", color: "var(--ink-muted)", fontSize: "0.9rem" }}>
+                {filter === "all"
+                  ? "You haven't booked any event shifts yet. Browse the open event opportunities below and apply to join the on-site crew!"
+                  : `You currently have no ${filter} shifts logged.`}
+              </p>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<ArrowRight size={14} />}
+                onClick={() => {
+                  document.getElementById("available-shifts-section")?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                Browse Open Shifts Below
               </Button>
             </Card>
           )}
@@ -803,7 +816,7 @@ export function WorkerDashboard({ navigate }: { navigate: (route: string) => voi
       </section>
 
       {/* Available Shift Opportunities Section */}
-      <section className="open-shifts-section" style={{ marginTop: 40 }}>
+      <section className="open-shifts-section" id="available-shifts-section" style={{ marginTop: 40 }}>
         <div className="section-filter-bar">
           <div>
             <h2 className="section-title-md">{t("opp_title")}</h2>
